@@ -52,5 +52,6 @@ class ofApp : public ofBaseApp{
 		unsigned int senderHeight = 0;
 		ofImage backImage; // Background image for alpha transparency
 		bool bBackDraw = false; // Alpha blending
+		bool SelectSender(); // Sender list selection dialog
 
 };

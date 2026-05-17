@@ -179,6 +179,10 @@ void ofApp::setup(){
 	//
 	// ndiReceiver.SetAudio(true);
 
+	// Centre on the screen
+	ofSetWindowPosition((ofGetScreenWidth()-ofGetWidth())/2, (ofGetScreenHeight()-ofGetHeight())/2);
+
+
 }
 
 
@@ -193,7 +197,7 @@ void ofApp::draw() {
 	// Background image for transparency testing
 	// Sender transparent pixels with alpha zero
 	// allow the background inage to show though
-	if(bBackDraw)
+	if (bBackDraw)
 		backImage.draw(0, 0, ofGetWidth(), ofGetHeight());
 
 	// Receive ofTexture
@@ -206,6 +210,7 @@ void ofApp::draw() {
 
 	// Receive ofImage
 	// ndiReceiver.ReceiveImage(ndiImage);
+	// Draw whether received or not
 	// ndiImage.draw(0, 0, ofGetWidth(), ofGetHeight());
 
 	/*
@@ -240,12 +245,9 @@ void ofApp::draw() {
 			ndiImage.getPixels().setFromExternalPixels(ndiChars, senderWidth, senderHeight, 4);
 			ndiImage.update();
 		}
+		ndiImage.draw(0, 0, ofGetWidth(), ofGetHeight());
 	}
 	*/
-
-	// Draw whether received or not
-	ndiImage.draw(0, 0, ofGetWidth(), ofGetHeight());
-	
 
 	// Show what it's receiving
 	ShowInfo();
@@ -309,23 +311,17 @@ void ofApp::ShowInfo() {
 //--------------------------------------------------------------
 void ofApp::keyPressed(int key) {
 
+	// Ignore if minimised
+	if (IsIconic(ofGetWin32Window()))
+		return;
+
 	char name[256]{};
 	int index = key - 48;
 	int nsenders = ndiReceiver.GetSenderCount();
 
+	// Space to show the sender list in a messagebox
 	if (key == ' ') {
-		// List all the senders
-		if (nsenders > 0) {
-			std::cout << "Number of NDI senders found: " << nsenders << std::endl;
-			for (int i = 0; i < nsenders; i++) {
-				ndiReceiver.GetSenderName(name, 256, i);
-				std::cout << "    Sender " << i << " [" << name << "]" << std::endl;
-			}
-			if (nsenders > 1)
-				std::cout << "Press key [0] to [" << nsenders - 1 << "] to select a sender" << std::endl;
-		}
-		else
-			std::cout << "No NDI senders found" << std::endl;
+		SelectSender();
 	}
 	else if (nsenders > 0 && index >= 0 && index < nsenders) {
 		// Update the receiver with the returned index
@@ -347,6 +343,39 @@ void ofApp::keyPressed(int key) {
 		}
 	}
 
+}
+
+//
+// Sender list selection dialog
+//
+bool ofApp::SelectSender()
+{
+	// Refresh the NDI sources and get the sender count
+	ndiReceiver.FindSenders();
+	// Create a local sender list
+	std::vector<std::string> senderlist = ndiReceiver.GetSenderList();
+	if (!senderlist.empty()) {
+		int selected = 0;
+		std::string str;
+		for (size_t i=0; i < senderlist.size(); i++) {
+			str += std::to_string(i);
+			str += " : [";
+			str += senderlist[i];
+			str += "]\n";
+		}
+		if (senderlist.size() > 1) {
+			str += "\nAfter closing this message box with OK\n";
+			str += "Press 0 to "; str += std::to_string(senderlist.size()-1);
+			str += " to select the required sender\n";
+		}
+		MessageBoxA(NULL, str.c_str(), "NDI senders", MB_OK);
+		return true;
+	}
+	else {
+		MessageBoxA(NULL, "No senders found", "Warning", MB_OK | MB_ICONWARNING);
+	}
+	// No senders
+	return false;
 }
 
 //--------------------------------------------------------------
