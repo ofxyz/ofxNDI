@@ -20,7 +20,7 @@
 
 =========================================================================
 
-                 Copyright(C) 2024 Lynn Jarvis.
+                 Copyright(C) 2024-2026 Lynn Jarvis.
 
 This program is free software : you can redistribute it and/or modify
 it under the terms of the GNU Lesser General Public License as published by
@@ -39,6 +39,10 @@ along with this program.If not, see < http://www.gnu.org/licenses/>.
 */
 #include "framework.h"
 #include "WinSenderNDI.h"
+
+// stb_image to load a jpg image file
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
 
 #define MAX_LOADSTRING 100
 
@@ -88,8 +92,20 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	printf("WinSenderNDI\n");
 	*/
 
-	// Load a bitmap from file
-	g_hBitmap = (HBITMAP)LoadImageA(NULL, "data/koala-on-tree.bmp", IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE);
+	// Load a jpg image using stb_image
+	int width, height, channels;
+	unsigned char* data = stbi_load("data/koala-on-tree.jpg", &width, &height, &channels, 4);
+	// CreateBttmap requires bgra data, swap r/b in place
+	unsigned char tmp = 0;
+    for (int i = 0; i < width*height; i++) {
+        tmp = data[i*4+0]; // r
+		// Swap red and blue
+        data[i*4+0] = data[i*4+2]; // r = b
+        data[i*4+2] = tmp; // b = r
+    }
+	// Create HBITMAP from the pixel data
+	g_hBitmap = CreateBitmap(width, height, 1, 32, data);
+	stbi_image_free(data);
 	if (!g_hBitmap) {
 		MessageBoxA(NULL, "Failed to load image", "WinSenderNDI", MB_OK);
 		return FALSE;
