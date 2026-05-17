@@ -86,6 +86,9 @@
 	02.03.26 - Created separate sender and receiver examples
 			   Updated ofxNDI with audio
 			   Update to NDI 6.3.1
+	16.05.26 - Add "B" for background - transparent black or opaque blue
+			   Equivalent Receiver "B" to enable/disable alpha blending
+
 
 */
 #include "ofApp.h"
@@ -306,7 +309,7 @@ void ofApp::ShowInfo() {
 		// Show sending options
 		ofDrawBitmapString("Sending options", 20, 48);
 
-		str = " NDI fps  (""F"") : ";
+		str = "   NDI fps  (""F"") : ";
 		framerate = ndiSender.GetFrameRate();
 		str += std::to_string(framerate);
 		// Limit fps display to 2 decimal places
@@ -314,26 +317,33 @@ void ofApp::ShowInfo() {
 		str = str.substr(0, s + 3);
 		ofDrawBitmapString(str, 20, 66);
 
-		str = " Async    (""A"") : ";
+		str = "   Async    (""A"") : ";
 		str += std::to_string((int)ndiSender.GetAsync());
 		ofDrawBitmapString(str, 20, 82);
 
-		str = " Readback (""P"") : ";
+		str = "   Readback (""P"") : ";
 		str += std::to_string((int)ndiSender.GetReadback());
 		ofDrawBitmapString(str, 20, 98);
 
-		str = " Format (""Y""""/""""R"") : ";
+		str = "   Format (""Y""""/""""R"") : ";
 		if (ndiSender.GetFormat() == NDIlib_FourCC_video_type_UYVY)
 			str += "YUV ";
 		else
 			str += "RGBA ";
 		ofDrawBitmapString(str, 20, 114);
 
-		str = " Size     (""S"") : ";
+		str = " Size       (""S"") : ";
 		str += std::to_string((int)senderWidth);
 		str += "x";
 		str += std::to_string((int)senderHeight);
 		ofDrawBitmapString(str, 20, 130);
+
+		str = " Background (""B"") : ";
+		if(bBackground)
+			str +="Transparent";
+		else
+			str +="Opaque";
+		ofDrawBitmapString(str, 20, 146);
 
 		// NDI version
 		str = "NDI version - " + ndiSender.GetNDIversion();
@@ -419,6 +429,13 @@ void ofApp::keyPressed(int key) {
 			}
 			break;
 
+		case 'b':
+		case 'B':
+			// Background
+			bBackground = !bBackground;
+			break;
+
+
 	} // end switch key
 
 	// Show the main window
@@ -433,7 +450,11 @@ void ofApp::DrawGraphics() {
 	// Draw graphics into an fbo used for the examples
 	m_fbo.begin();
 	ofEnableDepthTest();
-	ofClear(10, 100, 140, 255);
+	// Transparency
+	if(bBackground)
+		ofClear(0, 0, 0, 0); // Transparent black
+	else
+		ofClear(10, 100, 140, 255); // Solid blue
 	ofPushMatrix();
 	ofTranslate((float)senderWidth / 2.0, (float)senderHeight / 2.0, 0);
 	ofRotateYDeg(rotX);

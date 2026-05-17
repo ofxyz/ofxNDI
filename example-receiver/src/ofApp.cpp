@@ -86,6 +86,9 @@
 	02.03.26 - Created separate sender and receiver examples
 			   Updated ofxNDI with audio
 			   Update to NDI 6.3.1
+	16.05.26 - Add "B" to enable/disable alpha blending
+			   Equivalent Sender "B" background - transparent black or opaque blue
+			   Add background image for alpha blending
 
 */
 #include "ofApp.h"
@@ -149,6 +152,11 @@ void ofApp::setup(){
 	senderWidth = (unsigned char)ofGetWidth();
 	senderHeight = (unsigned char)ofGetHeight();
 
+	// Backgound image to show/hide sender alpha transparency
+	backImage.load("Central-Park.jpg");
+	backImage.setImageType(OF_IMAGE_COLOR_ALPHA);
+	ofEnableAlphaBlending(); // Default - blending
+
 	// Option : set streaming upload
 	// Pixel data upload to texture is optimised using two OpenGL 
 	// pixel buffers (pbo's) for approximately 20% speed increase.
@@ -181,6 +189,12 @@ void ofApp::update() {
 
 //--------------------------------------------------------------
 void ofApp::draw() {
+
+	// Background image for transparency testing
+	// Sender transparent pixels with alpha zero
+	// allow the background inage to show though
+	if(bBackDraw)
+		backImage.draw(0, 0, ofGetWidth(), ofGetHeight());
 
 	// Receive ofTexture
 	ndiReceiver.ReceiveImage(ndiTexture);
@@ -275,14 +289,16 @@ void ofApp::ShowInfo() {
 		}
 
 		if (nsenders == 1) {
-			ofDrawBitmapString("1 network source", 20, ofGetHeight() - 20);
+			ofDrawBitmapString("1 network source", 20, ofGetHeight() - 40);
 		}
 		else {
 			str = std::to_string(nsenders);
 			str += " network sources";
-			ofDrawBitmapString(str, 20, ofGetHeight() - 40);
-			ofDrawBitmapString("'SPACE' to list senders", 20, ofGetHeight() - 20);
 		}
+		if(bBackDraw)
+			ofDrawBitmapString("\"SPACE\" to list senders  :  \"B\" disable alpha blending", 20, ofGetHeight() - 20);
+		else
+			ofDrawBitmapString("\"SPACE\" to list senders  :  \"B\" enable alpha blending", 20, ofGetHeight() - 20);
 	}
 	else {
 		ofDrawBitmapString("Connecting . . .", 20, 30);
@@ -318,6 +334,17 @@ void ofApp::keyPressed(int key) {
 			std::cout << "Selected [" << ndiReceiver.GetSenderName(index) << "]" << std::endl;
 		else
 			std::cout << "Same sender" << std::endl;
+	}
+
+	// Alpha blending
+	if (key == 'b') {
+		if (ndiReceiver.ReceiverConnected()) {
+			bBackDraw = !bBackDraw;
+			if(bBackDraw)
+				ofEnableAlphaBlending();
+			else
+				ofDisableAlphaBlending();
+		}
 	}
 
 }

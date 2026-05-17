@@ -54,5 +54,6 @@ class ofApp : public ofBaseApp{
 		bool bReadback = true;
 		bool bAsync = true;
 		double framerate = 60.0;
+		bool bBackground = false;
 
 };

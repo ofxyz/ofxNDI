@@ -50,5 +50,7 @@ class ofApp : public ofBaseApp{
 		unsigned char *ndiChars; // unsigned char image array to receive
 		unsigned int senderWidth = 0; // sender width and height needed to receive char pixels
 		unsigned int senderHeight = 0;
+		ofImage backImage; // Background image for alpha transparency
+		bool bBackDraw = false; // Alpha blending
 
 };
