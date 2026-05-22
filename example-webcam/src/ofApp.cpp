@@ -4,7 +4,7 @@
 
 	https://ndi.video
 
-	Copyright (C) 2016-2025 Lynn Jarvis.
+	Copyright (C) 2016-2026 Lynn Jarvis.
 
 	http://www.spout.zeal.co
 
@@ -52,6 +52,7 @@
 	11-04-25 - Remove unused include <conio.h> (not OSX compatible) issue #60.
 	12.04.25 - Add RGBA pixel buffer for use with RGB grabber source
 	19-01-25 - Update to NDI 6.2.0.3
+	22-05-26 - Update to NDI 6.3.2.0
 
 */
 #include "ofApp.h"
