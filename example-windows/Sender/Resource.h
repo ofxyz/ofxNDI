@@ -5,20 +5,17 @@
 #define IDS_APP_TITLE			100
 
 #define IDD_WIN_NDI_DIALOG	    200
-#define IDD_ABOUTBOX			201
-#define IDM_ABOUT				202
-#define IDM_EXIT				203
-#define IDI_WIN_NDI			    204
+#define IDM_ABOUT				201
+#define IDM_EXIT				202
+#define IDI_WIN_NDI			    203
 
 #define IDC_WIN_NDI			    300
-#define IDC_ABOUT_TEXT          301
-#define IDC_SPOUT_URL           302
-#define IDC_NDI_URL             303
+
 #ifndef IDC_STATIC
 #define IDC_STATIC				-1
 #endif
+
 // Next default values for new objects
-//
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 

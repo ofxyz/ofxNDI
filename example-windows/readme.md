@@ -10,4 +10,4 @@ Visual Studio 2022 projects are provided for each example and will build using t
 
 Copy "Processing.NDI.Lib.x64.dll" from "ofxNDI/libs/NDI/export/vs/x64" to the application "Release\64" folder.
 
-Although the examples are for Windows, the library functions and application methods should be compatible for all platforms supported by ofxNDI.
+Although the examples are for Windows, the principles are applicable for all platforms supported by ofxNDI.

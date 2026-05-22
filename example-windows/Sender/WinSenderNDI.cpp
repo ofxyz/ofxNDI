@@ -36,6 +36,14 @@ You should have received a copy of the GNU Lesser General Public License
 along with this program.If not, see < http://www.gnu.org/licenses/>.
 ========================================================================
 
+15.05.24 - Example created - Version 1.000
+19.05.26 - Revision
+		   Initialize all variables
+		   Load a jpg image using stb_image instead of bmp with LoadImage
+		   Replace resource "About" dialog with ofxNDIutils::MessageDialog
+21.05.26   Rebuild with latest ofxNDI 2.003.000 - NDI 6.3.2.0 x64/MT
+		   Version 2.000
+
 */
 #include "framework.h"
 #include "WinSenderNDI.h"
@@ -47,7 +55,7 @@ along with this program.If not, see < http://www.gnu.org/licenses/>.
 #define MAX_LOADSTRING 100
 
 // Global Variables:
-HINSTANCE hInst;                       // current instance
+HINSTANCE hInst = NULL;                // current instance
 WCHAR szTitle[MAX_LOADSTRING]{};       // The title bar text
 WCHAR szWindowClass[MAX_LOADSTRING]{}; // the main window class name
 
@@ -67,8 +75,9 @@ ATOM                MyRegisterClass(HINSTANCE hInstance);
 BOOL                InitInstance(HINSTANCE, int);
 LRESULT CALLBACK    WndProc(HWND, UINT, WPARAM, LPARAM);
 INT_PTR CALLBACK    About(HWND, UINT, WPARAM, LPARAM);
-void ReleaseNDIsender();
 void Render();
+void ReleaseSender();
+void AboutBox();
 
 
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
@@ -93,9 +102,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	*/
 
 	// Load a jpg image using stb_image
-	int width, height, channels;
+	int width = 0;
+	int height = 0;
+	int channels = 0;
 	unsigned char* data = stbi_load("data/koala-on-tree.jpg", &width, &height, &channels, 4);
-	// CreateBttmap requires bgra data, swap r/b in place
+
+	// CreateBitmap requires bgra data, swap r/b in place
 	unsigned char tmp = 0;
     for (int i = 0; i < width*height; i++) {
         tmp = data[i*4+0]; // r
@@ -103,6 +115,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
         data[i*4+0] = data[i*4+2]; // r = b
         data[i*4+2] = tmp; // b = r
     }
+
 	// Create HBITMAP from the pixel data
 	g_hBitmap = CreateBitmap(width, height, 1, 32, data);
 	stbi_image_free(data);
@@ -112,7 +125,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	}
 
 	// Get the size of the bitmap
-	BITMAP bmpImage;
+	BITMAP bmpImage{};
 	GetObjectA(g_hBitmap, sizeof(BITMAP), &bmpImage);
 	g_BitmapWidth = bmpImage.bmWidth;
 	g_BitmapHeight = bmpImage.bmHeight;
@@ -124,10 +137,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
     // Perform application initialization:
     if (!InitInstance (hInstance, nCmdShow))
-    {
         return FALSE;
-    }
-
+ 
 	// Create a sending buffer initially the size of the loaded bitmap
 	// It is resized as necessary - see WM_PAINT
 	g_SenderWidth  = g_BitmapWidth;
@@ -191,6 +202,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	// Create a named sender
 	bInitialized = sender.CreateSender("Windows NDI Sender", g_SenderWidth, g_SenderHeight);
 
+	// STEP 4 in Render
+	// STEP 5 in WM_PAINT
+
 	// Main message loop:
 	MSG msg = { 0 };
 	while (WM_QUIT != msg.message)
@@ -201,6 +215,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 			DispatchMessage(&msg);
 		}
 		// Continue if a message is received
+		// See HoldFps in Render for rate control
 		Render();
 	}
 
@@ -219,7 +234,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
 void Render()
 {
-	// Trigger a re-paint to draw the bitmap and refresh the sending pixel buffer - see WM_PAINT
+	// Trigger a re-paint to draw the bitmap
+	// and refresh the sending pixel buffer - see WM_PAINT
 	InvalidateRect(g_hWnd, NULL, FALSE);
 	UpdateWindow(g_hWnd); // Update immediately
 
@@ -234,7 +250,7 @@ void Render()
 	unsigned char* pixels = g_pixelBuffer;
 	for (int i = 0; i < (int)(g_SenderHeight*g_SenderWidth); i++) {
 		*(pixels + 3) = 255; // alpha is the last of the 4 bytes - set from 0 to 255
-		pixels += 4; // move the pointer along to the next rgba pixel
+		pixels += 4; // move the buffer pointer along to the next rgba pixel
 	}
 
 	// =======================================
@@ -256,6 +272,41 @@ void Render()
 } // end Render
 
 
+  // Release sender and resources
+void ReleaseSender()
+{
+	if (!bInitialized)
+		return;
+
+	// Release NDI sender
+	sender.ReleaseSender();
+	// Free the sending buffer
+	if (g_pixelBuffer) free((void*)g_pixelBuffer);
+	g_pixelBuffer = nullptr;
+	g_SenderWidth = 0;
+	g_SenderHeight = 0;
+	// Keep the sender name
+	bInitialized = false;
+
+}
+
+
+// Resource dialog replaced by MessageDialog
+void AboutBox()
+{
+	std::string str;
+	str =  "                      WinSenderNDI\n\n";
+	str += "             Windows NDI sender example.\n";
+	str += "              Send a pixel buffer using\n";
+	str += "                 the ofxNDIsend class.\n";
+	str += "                   ofxNDI - " + ofxNDIutils::GetVersion() + "\n\n";
+	str += "                 <a href=\"https://spout.zeal.co\">https://spout.zeal.co</a>\n";
+	str += "                <a href=\"https://www.ndi.video\">https://www.ndi.video</a>\n\n";
+	ofxNDIutils::MessageDialogIcon(LoadIcon(hInst, MAKEINTRESOURCE(IDI_WIN_NDI)));
+	ofxNDIutils::MessageDialog(g_hWnd, str.c_str(), "About", MB_OK);
+
+}
+
 
 //
 //  FUNCTION: MyRegisterClass()
@@ -264,10 +315,8 @@ void Render()
 //
 ATOM MyRegisterClass(HINSTANCE hInstance)
 {
-    WNDCLASSEXW wcex;
-
-    wcex.cbSize = sizeof(WNDCLASSEX);
-
+	WNDCLASSEXW wcex{};
+    wcex.cbSize         = sizeof(WNDCLASSEX);
     wcex.style          = CS_HREDRAW | CS_VREDRAW;
     wcex.lpfnWndProc    = WndProc;
     wcex.cbClsExtra     = 0;
@@ -307,13 +356,11 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	   nullptr);
 
    if (!hWnd)
-   {
       return FALSE;
-   }
 
    // Centre the window on the desktop work area
    GetWindowRect(hWnd, &rc);
-   RECT WorkArea;
+   RECT WorkArea{};
    int WindowPosLeft = 0;
    int WindowPosTop = 0;
    SystemParametersInfo(SPI_GETWORKAREA, 0, (LPVOID)&WorkArea, 0);
@@ -328,26 +375,6 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
    g_hWnd = hWnd;
    
    return TRUE;
-}
-
-
-
-// Release sender and resources
-void ReleaseNDIsender()
-{
-	if (!bInitialized)
-		return;
-
-	// Release NDI sender
-	sender.ReleaseSender();
-	// Free the sending buffer
-	if (g_pixelBuffer) free((void*)g_pixelBuffer);
-	g_pixelBuffer = nullptr;
-	g_SenderWidth = 0;
-	g_SenderHeight = 0;
-	// Keep the sender name
-	bInitialized = false;
-
 }
 
 
@@ -371,7 +398,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			switch (wmId)
 			{
 				case IDM_ABOUT:
-					DialogBox(hInst, MAKEINTRESOURCE(IDD_ABOUTBOX), hWnd, About);
+					// About messagebox
+					AboutBox();
 					break;
 				case IDM_EXIT:
 					DestroyWindow(hWnd);
@@ -387,7 +415,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			if (IsIconic(hWnd))
 				break;
 
-			PAINTSTRUCT ps;
+			PAINTSTRUCT ps{};
 			HDC hdc = BeginPaint(g_hWnd, &ps);
 
 			// For this example, draw an image, capture the client area
@@ -467,87 +495,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
     }
     return 0;
-}
-
-// Message handler for about box.
-INT_PTR CALLBACK About(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
-{
- 	UNREFERENCED_PARAMETER(lParam);
-	char tmp[MAX_PATH]{};
-	char about[1024]{};
-	LPDRAWITEMSTRUCT lpdis{};
-	HWND hwnd = NULL;
-	HCURSOR cursorHand = NULL;
-
-    switch (message)
-    {
-    case WM_INITDIALOG:
-
-		sprintf_s(about, 256, "              WinSenderNDI");
-		strcat_s(about, 1024, "\n\n\n\n");
-		strcat_s(about, 1024, "    Windows NDI sender example.\n");
-		strcat_s(about, 1024, "       Send a pixel buffer using\n          the ofxNDIsend class.");
-		SetDlgItemTextA(hDlg, IDC_ABOUT_TEXT, (LPCSTR)about);
-		
-		//
-		// Url hyperlink hand cursor
-		//
-
-		// Spout 
-		cursorHand = LoadCursor(NULL, IDC_HAND);
-		hwnd = GetDlgItem(hDlg, IDC_SPOUT_URL);
-		SetClassLongPtrA(hwnd, GCLP_HCURSOR, (LONG_PTR)cursorHand);
-
-		// NDI
-		hwnd = GetDlgItem(hDlg, IDC_NDI_URL);
-		SetClassLongPtr(hwnd, GCLP_HCURSOR, (LONG_PTR)cursorHand);
-
-        return (INT_PTR)TRUE;
-
-	case WM_DRAWITEM:
-
-		// The blue hyperlinks
-		lpdis = (LPDRAWITEMSTRUCT)lParam;
-		if (lpdis->itemID == -1) break;
-		SetTextColor(lpdis->hDC, RGB(6, 69, 173));
-		switch (lpdis->CtlID) {
-			case IDC_SPOUT_URL:
-				DrawTextA(lpdis->hDC, "https://spout.zeal.co", -1, &lpdis->rcItem, DT_LEFT);
-				break;
-			case IDC_NDI_URL:
-				DrawTextA(lpdis->hDC, " https://www.ndi.tv", -1, &lpdis->rcItem, DT_LEFT);
-				break;
-			default:
-				break;
-		}
-		break;
-
-    case WM_COMMAND:
-
-		if (LOWORD(wParam) == IDC_SPOUT_URL) {
-			// Open the Spout website url
-			sprintf_s(tmp, MAX_PATH, "http://spout.zeal.co");
-			ShellExecuteA(hDlg, "open", tmp, NULL, NULL, SW_SHOWNORMAL);
-			EndDialog(hDlg, 0);
-			return (INT_PTR)TRUE;
-		}
-
-		if (LOWORD(wParam) == IDC_NDI_URL) {
-			// Open the NDI website url
-			sprintf_s(tmp, MAX_PATH, "https://www.ndi.tv/");
-			ShellExecuteA(hDlg, "open", tmp, NULL, NULL, SW_SHOWNORMAL);
-			EndDialog(hDlg, 0);
-			return (INT_PTR)TRUE;
-		}
-
-        if (LOWORD(wParam) == IDOK || LOWORD(wParam) == IDCANCEL)
-        {
-            EndDialog(hDlg, LOWORD(wParam));
-            return (INT_PTR)TRUE;
-        }
-        break;
-    }
-    return (INT_PTR)FALSE;
 }
 
 // That's all..
