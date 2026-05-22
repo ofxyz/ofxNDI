@@ -21,10 +21,6 @@
 		FindSenders
 		GetSenderCount
 		SenderSelected
-		ReceiverCreated
-
-	Receiver creation
-		CreateReceiver
 
 	Receive sender pixels
 		ReceiveImage
@@ -41,7 +37,7 @@
 
 =========================================================================
 
-                 Copyright(C) 2024 Lynn Jarvis.
+                 Copyright(C) 2024-2026 Lynn Jarvis
 
    This program is free software : you can redistribute it and/or modify
    it under the terms of the GNU Lesser General Public License as published by
@@ -57,42 +53,44 @@
    along with this program.If not, see < http://www.gnu.org/licenses/>.
 ========================================================================
 
+15.05.24 - Example created - Version 1.000
+19.05.26 - Revision
+		   Initialize all variables
+		   Replace resource dialogs with ofxNDIutils::MessageDialog
+		   Simplify sender selection code
+21.05.26   Rebuild with latest ofxNDI 2.003.000 - NDI 6.3.2.0 x64/MT
+		   Version 2.000
+
 */
 #include "framework.h"
-#include "WinReceiverNDI.h"
+#include "resource.h"
+#include <vector>
+#include "ofxNDIreceive.h"
 
 #define MAX_LOADSTRING 100
 
 // Global Variables:
-HINSTANCE hInst;                       // current instance
+HINSTANCE hInst = NULL;                // current instance
 WCHAR szTitle[MAX_LOADSTRING]{};       // The title bar text
 WCHAR szWindowClass[MAX_LOADSTRING]{}; // the main window class name
 
 ofxNDIreceive receiver;                // Receiver object
 HWND g_hWnd = NULL;                    // Window handle
 unsigned char *pixelBuffer = nullptr;  // Receiving pixel buffer
-std::string g_senderName;              // full NDI sender name used by a receiver
-int g_senderIndex = -1;                // index into the list of NDI senders
 unsigned int g_SenderWidth = 0;        // Received sender width
 unsigned int g_SenderHeight = 0;       // Received sender height
-double g_SenderFps = 0.0;              // For fps display aver7aging
+double g_SenderFps = 0.0;              // For fps display averaging
 bool bShowInfo = true;                 // Show on-screen info
-bool bInitialized = false;             // Receiver is initialized
-
-// Statics for sender selection dialog
-static int nSenders = 0;
-static char sendername[256]{};
-static std::vector<std::string> senderList; // Name list for selection
 
 // Forward declarations of functions included in this code module:
 ATOM                MyRegisterClass(HINSTANCE hInstance);
 BOOL                InitInstance(HINSTANCE, int);
 LRESULT CALLBACK    WndProc(HWND, UINT, WPARAM, LPARAM);
-INT_PTR CALLBACK    SenderProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 INT_PTR CALLBACK    About(HWND, UINT, WPARAM, LPARAM);
-bool CheckSenders();
-void ReleaseNDIreceiver();
+
 void Render();
+bool SelectSender();
+void AboutBox();
 void ShowSenderInfo(HDC hdc); // Show sender information on screen
 void DrawString(std::string str, HDC hdc, COLORREF col, int xpos, int ypos); // Draw text
 
@@ -107,7 +105,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
  	
 	// For debugging
-	// Console window so printf works
+	/*
 	FILE* pCout; // should really be freed on exit
 	AllocConsole();
 	freopen_s(&pCout, "CONOUT$", "w", stdout);
@@ -115,7 +113,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	HMENU hmenu = GetSystemMenu(GetConsoleWindow(), FALSE);
 	EnableMenuItem(hmenu, SC_CLOSE, MF_GRAYED);
 	printf("WinReceiverNDI\n");
-
+	*/
 
     // Initialize global strings
     LoadStringW(hInstance, IDS_APP_TITLE, szTitle, MAX_LOADSTRING);
@@ -124,9 +122,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
     // Perform application initialization:
     if (!InitInstance (hInstance, nCmdShow))
-    {
         return FALSE;
-    }
 
 	// =======================================
 	receiver.SetAudio(false); // Set to receive no audio
@@ -145,11 +141,13 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 			DispatchMessage(&msg);
 		}
 		// Continue if a message is received
+		// See HoldFps in Render for rate control
 		{
 			Render();
 		}
 	}
 
+	// Free the pixel buffer
 	if (pixelBuffer) delete[] pixelBuffer;
 
 	// Release the receiver
@@ -161,56 +159,55 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
 void Render()
 {
-	// =======================================
-	// Receive a pixel buffer
+	// Receive a pixel buffer from the NDI sender
+	// Frame rate might be less than the draw cycle
+	// ReceiveImage succeeds if it finds a sender
+	// and creates a receiver if not initialized yet
+	// or a new sender has been selected
+	// Width and height can optionally be returned as unsigned int
+	//     receiver.ReceiveImage(width, height)
+	//
+	if (receiver.ReceiveImage()) {
 
-
-	// Test for network change and presence of senders.
-	// Create or re-create a receiver if the selected sender is changed.
-	if(CheckSenders()) {
-
-		unsigned int width = 0;
-		unsigned int height = 0;
-
-		// Receive from the NDI sender
-		// Frame rate might be much less than the draw cycle
-		// ReceiveImage succeeds if it finds a sender
-		if (receiver.ReceiveImage(width, height)) {
-			// Have the sender dimensions changed ?
-			if (g_SenderWidth != width || g_SenderHeight != height) {
-				// Update the sender name name in case the one in this position has changed
-				g_senderName = receiver.GetSenderName(g_senderIndex);
-				// Set the sender name or the old one will be used
-				receiver.SetSenderName(g_senderName.c_str());
-				g_SenderWidth  = width;
-				g_SenderHeight = height;
-				// Update the receiving pixel buffer
-				if (pixelBuffer) free((void*)pixelBuffer);
-				pixelBuffer = (unsigned char*)malloc(width*height * 4 * sizeof(unsigned char));
-			}
-
-			// Copy NDI pixels to the local pixel buffer
-			// CopyImage uses SSE2 functions if the width is 16bit aligned
-			ofxNDIutils::CopyImage((const unsigned char*)receiver.GetVideoData(),
-				pixelBuffer, width, height, receiver.GetVideoStride());
-
-			// Free NDI video frame data
-			receiver.FreeVideoData();
-
-			// Trigger a re-paint to draw the pixel buffer - see WM_PAINT
-			InvalidateRect(g_hWnd, NULL, FALSE);
-
-			// Update immediately
-			UpdateWindow(g_hWnd);
-
+		// Have the sender dimensions changed ?
+		if (g_SenderWidth  != receiver.GetSenderWidth()
+		 || g_SenderHeight != receiver.GetSenderHeight()) {
+			g_SenderWidth   = receiver.GetSenderWidth();
+			g_SenderHeight  = receiver.GetSenderHeight();
+			// Update the receiving pixel buffer
+			if (pixelBuffer) free((void*)pixelBuffer);
+			pixelBuffer = (unsigned char*)malloc(g_SenderWidth*g_SenderHeight*4*sizeof(unsigned char));
 		}
-		else {
-			// No senders or the sender closed
-			// Take no action if the sender closed
-			// Receiving will resume when it re-opens
-		}
+
+		// In this example an independent pixel buffer is used
+		// which is most likely adaptable for other applications
+
+		// Copy received NDI video frame data to the local pixel buffer
+		// CopyImage uses SSE2 functions if the width is 16bit aligned
+		ofxNDIutils::CopyImage((const unsigned char*)receiver.GetVideoData(),
+			pixelBuffer, g_SenderWidth, g_SenderHeight, receiver.GetVideoStride());
+
+		// The NDI video frame data must be freed every frame
+		// to prevent a memory leak. Alternatively, to avoid the
+		// copy, the video data could be used directly in WM_PAINT
+		// and the NDI data freed after that
+
+		// Free NDI video frame data
+		receiver.FreeVideoData();
+
+		// Trigger a re-paint to draw the pixel buffer - see WM_PAINT
+		InvalidateRect(g_hWnd, NULL, FALSE);
+
+		// Update immediately
+		UpdateWindow(g_hWnd);
 
 	}
+	else {
+		// No senders or the sender closed
+		// Take no action if the sender closed
+		// Receiving will resume when it re-opens
+	}
+
 
 	// =======================================
 	// Control the render cycle rate
@@ -224,67 +221,59 @@ void Render()
 } // end Render
 
 
-// =======================================
-// Test for network change
-// Create receiver if nor initialized
-// or a new sender has been selected
 //
-bool CheckSenders() {
+// Sender list selection dialog
+//
+bool SelectSender()
+{
+	// Refresh the NDI sources and get the sender count
+	receiver.FindSenders();
 
-	// Update the NDI sender list to find new senders
-	// There is no delay if no new senders are found
-	int nsenders = receiver.FindSenders();
-
-	// Check the sender count
-	if (nsenders > 0) {
-		// Has the user changed the sender index ?
-		if (receiver.SenderSelected()) {
-			// Retain the last sender in case of network delay
-			// Wait for the network to come back up or for the
-			// user to select another sender when it does
-			if (nsenders > 1) {
-				// Release the current receiver.
-				// A new one is then created from the selected sender index.
-				receiver.ReleaseReceiver();
-			}
+	// Create a local sender list
+	std::vector<std::string> senderlist = receiver.GetSenderList();
+	if (!senderlist.empty()) {
+		// MessageDialog with combobox returns the item index
+		// No icon used to give a wider combo-box for long names
+		int selected = receiver.GetSenderIndex();
+		if (ofxNDIutils::MessageDialog(g_hWnd, NULL, "Select sender", MB_OKCANCEL, senderlist, selected) == IDOK) {
+			//
+			// Update the receiver with the returned index.
+			// If the selected sender is different from the current one,
+			// the receiver is released and the class sender name updated.
+			// A new receiver is then created by ReceiveImage
+			//
+			if (receiver.SetSenderIndex(selected))
+				std::cout << "Selected [" <<receiver.GetSenderName(selected) << "]" << std::endl;
+			else
+				std::cout << "Same sender" << std::endl;
 		}
-		// Update global variables
-		g_senderName = receiver.GetSenderName();
-		g_senderIndex = receiver.GetSenderIndex();
-
-		// Create a new receiver if not already
-		if (!receiver.ReceiverCreated()) {
-			// A receiver is created from an index into a list of sender names.
-			// The current user selected index is saved in the NDIreceiver class
-			// and is used to create the receiver unless you specify a particular index.
-			// The receiver is created with default preferred format BGRA
-			bInitialized = receiver.CreateReceiver();
-		}
-
+		return true;
+	}
+	else {
+		// Add a caption 'X' for cancel like a conventional MessageBox
+		ofxNDIutils::MessageDialogCancel(true);
+		ofxNDIutils::MessageDialog(g_hWnd, "No senders found", "Warning", MB_OK | MB_ICONWARNING);
 	}
 
-	return (nsenders > 0);
+	// No senders
+	return false;
 
-} // end CheckSenders
+} // end SelectSender
 
 
-// Release receiver and resources
-void ReleaseNDIreceiver()
-{
-	if (!bInitialized)
-		return;
-
-	// Release NDI receiver
-	receiver.ReleaseReceiver();
-	// Free the receiving buffer because the
-	// receiving resolution might have changed
-	if (pixelBuffer) free((void*)pixelBuffer);
-	pixelBuffer = nullptr;
-	g_SenderWidth = 0;
-	g_SenderHeight = 0;
-	bInitialized = false;
-
-} // end ReleaseNDIreceiver
+// Resource dialog replaced by MessageDialog
+void AboutBox() {
+	std::string str;
+	str =  "                      WinReceiverNDI\n\n";
+	str += "             Windows NDI receiver example.\n";
+	str += "              Receive to a pixel buffer using\n";
+	str += "                 the ofxNDIreceive class.\n";
+	str += "                     ofxNDI - " + ofxNDIutils::GetVersion() + "\n\n";
+	str += "                    <a href=\"https://spout.zeal.co\">https://spout.zeal.co</a>\n";
+	str += "                   <a href=\"https://www.ndi.video\">https://www.ndi.video</a>\n\n";
+	ofxNDIutils::MessageDialogIcon(LoadIcon(hInst, MAKEINTRESOURCE(IDI_WIN_NDI)));
+	ofxNDIutils::MessageDialog(g_hWnd, str.c_str(), "About", MB_OK);
+}
 
 
 void ShowSenderInfo(HDC hdc)
@@ -309,9 +298,8 @@ void ShowSenderInfo(HDC hdc)
 
 void DrawString(std::string str, HDC hdc, COLORREF col, int xpos, int ypos)
 {
-	HFONT hFont, hOldFont;
-	hFont = (HFONT)GetStockObject(SYSTEM_FONT);
-	hOldFont = (HFONT)SelectObject(hdc, hFont);
+	HFONT hFont = (HFONT)GetStockObject(SYSTEM_FONT);
+	HFONT hOldFont = (HFONT)SelectObject(hdc, hFont);
 	if (hOldFont)
 	{
 		// Text colour
@@ -335,10 +323,8 @@ void DrawString(std::string str, HDC hdc, COLORREF col, int xpos, int ypos)
 //
 ATOM MyRegisterClass(HINSTANCE hInstance)
 {
-    WNDCLASSEXW wcex;
-
-    wcex.cbSize = sizeof(WNDCLASSEX);
-
+	WNDCLASSEXW wcex{};
+    wcex.cbSize         = sizeof(WNDCLASSEX);
     wcex.style          = CS_HREDRAW | CS_VREDRAW;
     wcex.lpfnWndProc    = WndProc;
     wcex.cbClsExtra     = 0;
@@ -378,13 +364,11 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 	   nullptr);
 
    if (!hWnd)
-   {
       return FALSE;
-   }
 
    // Centre the window on the desktop work area
    GetWindowRect(hWnd, &rc);
-   RECT WorkArea;
+   RECT WorkArea{};
    int WindowPosLeft = 0;
    int WindowPosTop = 0;
    SystemParametersInfo(SPI_GETWORKAREA, 0, (LPVOID)&WorkArea, 0);
@@ -414,6 +398,34 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
     switch (message)
     {
+		case WM_RBUTTONDOWN:
+			// Right click to select a sender
+			SelectSender();
+			break;
+
+		case WM_KEYUP:
+		{
+			// Space bar to show/hide on-screen text
+			if (wParam == 0x20) {
+				bShowInfo = !bShowInfo;
+			}
+			else {
+				// Sender index selection by key press 0-9
+				// For compatibility with the openframeworks example
+				// (ofxNDI-example-receiver)
+				int index = (int)wParam - 48; // The key pressed
+				int nsenders = receiver.GetSenderCount();
+				if (nsenders > 0 && index >= 0 && index < nsenders) {
+					// Update the receiver with the key index
+					if (receiver.SetSenderIndex(index))
+						printf("[%s]\n", receiver.GetSenderName(index).c_str());
+					else
+						printf("Same sender\n");
+				}
+			}
+		}
+		break;
+
 		case WM_COMMAND:
 		{
 			int wmId = LOWORD(wParam);
@@ -421,14 +433,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			switch (wmId)
 			{
 				case IDM_ABOUT:
-					DialogBox(hInst, MAKEINTRESOURCE(IDD_ABOUTBOX), hWnd, About);
+					// About messagebox
+					AboutBox();
 					break;
 				case IDM_OPEN:
-					// Sender selection dialog box 
-					sendername[0] = 0; // Clear static name for dialog
-					senderList = receiver.GetSenderList(); // Update the sender name list
-					g_senderIndex = receiver.GetSenderIndex(); // and the sender index
-					DialogBox(hInst, MAKEINTRESOURCE(IDD_SENDERBOX), hWnd, (DLGPROC)SenderProc);
+					// Sender selection messagebox
+					SelectSender();
 					break;
 				case IDM_EXIT:
 					DestroyWindow(hWnd);
@@ -442,7 +452,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     case WM_PAINT:
         {
 			// Draw the received image
-			PAINTSTRUCT ps;
+			PAINTSTRUCT ps{};
 			HDC hdc = BeginPaint(hWnd, &ps);
 			RECT dr = { 0 };
 			GetClientRect(hWnd, &dr);
@@ -462,13 +472,15 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			}
 			else if (pixelBuffer) {
 
-				// The received sender format is BGRA and matches the Windows bitmap
+				// The received sender format is set to BGRA
+				// with SetFormat(NDIlib_recv_color_format_BGRX_BGRA)
+				// and matches the Windows bitmap
 				BITMAPINFO bmi;
 				ZeroMemory(&bmi, sizeof(BITMAPINFO));
 				bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
 				bmi.bmiHeader.biSizeImage = (LONG)(g_SenderWidth * g_SenderHeight * 4); // Pixel buffer size
 				bmi.bmiHeader.biWidth = (LONG)g_SenderWidth; // Width of buffer
-				bmi.bmiHeader.biHeight = -(LONG)g_SenderHeight; // Height of buffer allowing for upside-downs bitmap
+				bmi.bmiHeader.biHeight = -(LONG)g_SenderHeight; // Height of buffer (negative for upside-down bitmap)
 				bmi.bmiHeader.biPlanes = 1;
 				bmi.bmiHeader.biBitCount = 32;
 				bmi.bmiHeader.biCompression = BI_RGB;
@@ -502,26 +514,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         }
         break;
 
-	
-	case WM_RBUTTONDOWN:
-		// RH click to select a sender
-		{
-			sendername[0] = 0; // Clear static name for dialog
-			senderList = receiver.GetSenderList(); // Update the sender name list
-			g_senderIndex = receiver.GetSenderIndex(); // and the sender index
-			DialogBox(hInst, MAKEINTRESOURCE(IDD_SENDERBOX), hWnd, (DLGPROC)SenderProc);
-		}
-		break;
-
-	case WM_KEYUP:
-		{
-			// Space bar to show/hide on-screen text
-			if (wParam == 0x20) {
-				bShowInfo = !bShowInfo;
-			}
-		}
-		break;
-    
 	case WM_DESTROY:
         PostQuitMessage(0);
         break;
@@ -531,160 +523,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
     }
     return 0;
-}
-
-// Message handler for about box.
-// adapted for this example.
-INT_PTR CALLBACK About(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
-{
- 	UNREFERENCED_PARAMETER(lParam);
-	char tmp[MAX_PATH]{};
-	char about[1024]{};
-	LPDRAWITEMSTRUCT lpdis{};
-	HWND hwnd = NULL;
-	HCURSOR cursorHand = NULL;
-
-    switch (message)
-    {
-    case WM_INITDIALOG:
-
-		sprintf_s(about, 256, "              WinReceiverNDI");
-		strcat_s(about, 1024, "\n\n\n\n");
-		strcat_s(about, 1024, "     Windows NDI receiver example.\n");
-		strcat_s(about, 1024, "      Receive to a pixel buffer using\n         the ofxNDIreceive class.");
-		SetDlgItemTextA(hDlg, IDC_ABOUT_TEXT, (LPCSTR)about);
-		
-		//
-		// Url hyperlink hand cursor
-		//
-
-		// Spout 
-		cursorHand = LoadCursor(NULL, IDC_HAND);
-		hwnd = GetDlgItem(hDlg, IDC_SPOUT_URL);
-		SetClassLongPtrA(hwnd, GCLP_HCURSOR, (LONG_PTR)cursorHand);
-
-		// NDI
-		hwnd = GetDlgItem(hDlg, IDC_NDI_URL);
-		SetClassLongPtr(hwnd, GCLP_HCURSOR, (LONG_PTR)cursorHand);
-
-        return (INT_PTR)TRUE;
-
-	case WM_DRAWITEM:
-
-		// The blue hyperlinks
-		lpdis = (LPDRAWITEMSTRUCT)lParam;
-		if (lpdis->itemID == -1) break;
-		SetTextColor(lpdis->hDC, RGB(6, 69, 173));
-		switch (lpdis->CtlID) {
-			case IDC_SPOUT_URL:
-				DrawTextA(lpdis->hDC, "https://spout.zeal.co", -1, &lpdis->rcItem, DT_LEFT);
-				break;
-			case IDC_NDI_URL:
-				DrawTextA(lpdis->hDC, "https://www.ndi.tv", -1, &lpdis->rcItem, DT_LEFT);
-				break;
-			default:
-				break;
-		}
-		break;
-
-    case WM_COMMAND:
-
-		if (LOWORD(wParam) == IDC_SPOUT_URL) {
-			// Open the Spout website url
-			sprintf_s(tmp, MAX_PATH, "http://spout.zeal.co");
-			ShellExecuteA(hDlg, "open", tmp, NULL, NULL, SW_SHOWNORMAL);
-			EndDialog(hDlg, 0);
-			return (INT_PTR)TRUE;
-		}
-
-		if (LOWORD(wParam) == IDC_NDI_URL) {
-			// Open the NDI website url
-			sprintf_s(tmp, MAX_PATH, "https://www.ndi.tv/");
-			ShellExecuteA(hDlg, "open", tmp, NULL, NULL, SW_SHOWNORMAL);
-			EndDialog(hDlg, 0);
-			return (INT_PTR)TRUE;
-		}
-
-        if (LOWORD(wParam) == IDOK || LOWORD(wParam) == IDCANCEL)
-        {
-            EndDialog(hDlg, LOWORD(wParam));
-            return (INT_PTR)TRUE;
-        }
-        break;
-    }
-    return (INT_PTR)FALSE;
-}
-
-// =======================================
-// Message handler for selecting sender
-INT_PTR  CALLBACK SenderProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
-{
-	UNREFERENCED_PARAMETER(lParam); // suppress warning
-
-	static int activeindex = 0;
-
-	switch (message) {
-
-	case WM_INITDIALOG:
-	{
-		// Create a sender name list for the combo box
-		HWND hwndList = GetDlgItem(hDlg, IDC_SENDERS);
-
-		// Populate the combo box
-		char name[256]{};
-		if (senderList.size() > 0) {
-			for (int i = 0; i < (int)senderList.size(); i++) {
-				strcpy_s(name, 256, senderList[i].c_str());
-				// Current sender for the initial combo box item
-				if (i == g_senderIndex) {
-					activeindex = i;
-					strcpy_s(sendername, 256, name);
-				}
-				SendMessageA(hwndList, (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)name);
-			}
-			// Show the current sender as the initial item
-			SendMessageA(hwndList, CB_SETCURSEL, (WPARAM)activeindex, (LPARAM)0);
-		}
-	}
-	return TRUE;
-
-	case WM_COMMAND:
-
-		// Combo box selection
-		if (HIWORD(wParam) == CBN_SELCHANGE) {
-			// Get the selected sender name
-			const int index = (int)SendMessageA((HWND)lParam, (UINT)CB_GETCURSEL, (WPARAM)0, (LPARAM)0);
-			SendMessageA((HWND)lParam, (UINT)CB_GETLBTEXT, (WPARAM)index, (LPARAM)sendername);
-			activeindex = index;
-		}
-		// Drop through
-
-		switch (LOWORD(wParam)) {
-
-		case IDOK:
-			// Selected sender
-			if (sendername[0]) {
-				// Reset the receiving sender index
-				g_senderIndex = activeindex;
-				// Set the new sender name for the receiver class
-				receiver.SetSenderName(senderList[g_senderIndex]);
-				// A new sender is detected by CheckSenders
-				// and the receiver is re-created.
-			}
-			EndDialog(hDlg, 1);
-			break;
-
-		case IDCANCEL:
-			// User pressed cancel.
-			EndDialog(hDlg, 0);
-			return (INT_PTR)TRUE;
-
-		default:
-			return (INT_PTR)FALSE;
-		}
-	}
-
-	return (INT_PTR)FALSE;
 }
 
 // That's all..

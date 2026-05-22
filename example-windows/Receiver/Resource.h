@@ -2,22 +2,17 @@
 // Microsoft Visual C++ generated include file.
 // Used by WinReceiverNDI.rc
 
-#define IDS_APP_TITLE			103
+#define IDS_APP_TITLE			100
 
-#define IDD_WIN_NDI_DIALOG	    102
-#define IDD_ABOUTBOX			103
-#define IDM_ABOUT				104
-#define IDD_SENDERBOX			104
-#define IDM_OPEN				105
-#define IDM_EXIT				106
-#define IDI_WIN_NDI			    107
+#define IDD_WIN_NDI_DIALOG	    200
+#define IDM_ABOUT				202
+#define IDM_OPEN				203
+#define IDM_EXIT				204
+#define IDI_WIN_NDI			    205 // Icon
 
-#define IDC_WIN_NDI			    200
-#define IDC_ABOUT_TEXT          201
-#define IDC_SPOUT_URL           202
-#define IDC_NDI_URL             203
-#define IDC_SENDERS             204
-#define IDC_MYICON				2
+#define IDC_WIN_NDI			    300 // Main window
+
+#define IDC_MYICON				 2
 #ifndef IDC_STATIC
 #define IDC_STATIC				-1
 #endif
