@@ -1,11 +1,31 @@
 ﻿## Updates
 --------------------------
+22.05.26
+ofxNDI version 2.003.000\
+NDI SDK Vers 6.3.2.0\
+ofxNDIreceiver.cpp\
+02.05.26 - All ReceiveImage functions - call OpenReceiver before check for allocation\
+03.05.26 - All ReceiveImage functions - test for allocation together with size change\
+  to re-allocate. Remove initial return if not allocated.\
+  Receiving texture/fbo/image/buffer can be initially unallocated.\
+ofxNDIreceive.cpp\
+28-02-26 - FindGetSources - recover new or current sources\
+  FindSenders - allow for no senders left\
+02-05-26 - GetSenderCount() - Add FindSenders so that the function\
+  can be called independently of ReceiveImage\
+22.05.26 - Add ReceiveImage overload for no arguments\
+  Revise CreateReceiver\
+ofxNDIutils.cpp\
+20-05-26 - Add MessageDialog functions from SpoutUtils - SpoutMessageBox\
+  Add MessageDialogCancel to add a caption 'X'\
+  Update ofxNDI version to 2.003.000\
+--------------------------
 13.03.26
 Add audio functions and examples\
-ofxNDI version 2.003.000\
+ofxNDI version 2.002.000\
 NDI SDK Vers 6.3.1.0\
 ofxNDIreceiver.cpp\
-06.03-26 - All ReceiveImage functions - check for allocation if not re-sized
+06.03-26 - All ReceiveImage functions - check for allocation if not re-sized\
 ofxNDIreceive.cpp\
 23-02-26 - FindSenders - create finder and check for it on first call\
   OpenReceiver - use FindSenders instead of FindGetSources\
