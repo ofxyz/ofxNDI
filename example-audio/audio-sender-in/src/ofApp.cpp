@@ -72,6 +72,12 @@ void ofApp::setup() {
 	auto alldevices = soundStream.getDeviceList();
 	// Select the device number as required by your system
 	settings.setInDevice(alldevices[0]); // Speakers
+	printf("  n devices = %d\n", (int)alldevices.size());
+	vector<ofSoundDevice> devices = soundStream.getDeviceList();
+	for (int i=0; i<(int)alldevices.size(); i++) {
+		printf("(%d) %s\n", i, alldevices[i].name.c_str());
+	}
+
 	settings.setInListener(this);
 	settings.sampleRate = sampleRate;
 	settings.numInputChannels = nChannels;
