@@ -29,6 +29,9 @@
 	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 	=========================================================================
 	
+	18.05.26 - Add MessageDialog functions to ofxNDIutils (Windows only)
+			   Right click for MessageDialog combobox to select a sender
+			   Revise ofxNDIreceive::CreateReceiver
 
 */
 #include "ofApp.h"
@@ -152,6 +155,7 @@ void ofApp::draw()
 					// Mutex lock for variables shared with audioOut
 					// (availableSamples and audioBuffer)
 					std::lock_guard<std::mutex> lock(audioMutex);
+
 					//
 					// Get the left and right channels
 					//
@@ -251,12 +255,12 @@ bool ofApp::SetupSoundStream()
 	// Increase nSamples by 1 in case of an alternating sequence
 	bufferSize = std::pow(2.0, std::ceil(std::log2(nSamples+1)));
 
-	// printf("SoundStream\n");
-	// printf("sampleRate = %d\n", sampleRate);
-	// printf("nChannels  = %d\n", nChannels);
-	// printf("nSamples   = %d\n", nSamples);
-	// printf("nStride    = %d\n", nStride);
-	// printf("bufferSize = %d\n", bufferSize);
+	printf("\nSoundStream setup\n");
+	printf("   sampleRate = %d\n", sampleRate);
+	printf("   nChannels  = %d\n", nChannels);
+	printf("   nSamples   = %d\n", nSamples);
+	printf("   nStride    = %d\n", nStride);
+	printf("   bufferSize = %d\n", bufferSize);
 
 	// nChannels etc is established from the connected sender
 	ofSoundStreamSettings settings;
@@ -275,7 +279,7 @@ bool ofApp::SetupSoundStream()
 		return true;
 	}
 
-	printf("Soundstream setup failed\n");
+	printf("\nSoundstream setup failed\n");
 
 	return false;
 
@@ -322,11 +326,11 @@ void ofApp::DrawAudio()
 	int yPos = ofGetHeight()/2; // Centre of the window
 
 	// Audio data is -1.0 - +1.0
-	// increase to +- 1/4 window height
-	float h = (float)(ofGetHeight()/4);
+	// increase to +- 1/3 window height
+	float h = (float)(ofGetHeight()/3);
 
 	// Samples spaced over the window width
-	float xStep = (float)ofGetWidth()/nSamples; 
+	float xStep = (float)ofGetWidth()/nSamples;
 
 	float sample = 0.0f;
 	float x = 0.0f;
@@ -436,20 +440,14 @@ void ofApp::ShowInfo() {
 		}
 
 		if (nsenders == 1) {
-			ofDrawBitmapString("1 network source - 'SPACE' to list senders", 40, ofGetHeight() - 20);
+			str = "1 network source";
 		}
 		else {
 			str = std::to_string(nsenders);
 			str += " network sources";
-			ofDrawBitmapString(str, 40, ofGetHeight() - 40);
-			str = "'SPACE' to list senders";
-			if (nsenders > 1) {
-				str += " '0' to '";
-				str += std::to_string(nsenders - 1);
-				str += "' to select";
-			}
-			ofDrawBitmapString(str.c_str(), 40, ofGetHeight() - 20);
 		}
+		str += " : Right click - select sender";
+		ofDrawBitmapString(str, 40, ofGetHeight() - 20);
 	}
 	else {
 		ofDrawBitmapString("Connecting . . .", 20, 30);
@@ -465,37 +463,16 @@ void ofApp::keyPressed(int key) {
 	// Refresh the senders
 	ndiReceiver.FindSenders();
 	int nsenders = ndiReceiver.GetSenderCount();
-
-	if (key == ' ') {
-
-		// List all the senders
-		if (nsenders > 0) {
-			std::cout << "Number of NDI senders found: " << nsenders << std::endl;
-			for (int i = 0; i < nsenders; i++) {
-				ndiReceiver.GetSenderName(name, 256, i);
-				std::cout << "    Sender " << i << " [" << name << "]" << std::endl;
-			}
-			if (nsenders > 1)
-				std::cout << "Press key [0] to [" << nsenders - 1 << "] to select a sender" << std::endl;
-		}
-		else
-			std::cout << "No NDI senders found" << std::endl;
-	}
-	else if (nsenders > 0 && index >= 0 && index < nsenders) {
+	if (nsenders > 0 && index >= 0 && index < nsenders) {
 		// Update the receiver with the returned index
+		// another one is created from the selected index by ReceiveImage
 		// Returns false if the current sender is selected
 		if (ndiReceiver.SetSenderIndex(index)) {
 			std::cout << "Selected [" << ndiReceiver.GetSenderName(index) << "]" << std::endl;
-			// Release the current NDI receiver
-			// another one is created from the selected index by ReceiveImage
-			ndiReceiver.ReleaseReceiver();
-
 			// Stop and close soundstream
 			soundStream.close();
-
 			// Re-set to match the sender audio data
 			bSoundStream = false;
-
 			// Clear audio data
 			audioBuffer.clear();
 			lAudio.clear();
@@ -504,7 +481,6 @@ void ofApp::keyPressed(int key) {
 			readIndex = 0;
 			availableSamples = 0;
 			bAudioReceived = false;
-
 		}
 		else {
 			std::cout << "Same sender" << std::endl;
@@ -513,6 +489,12 @@ void ofApp::keyPressed(int key) {
 
 }
 
+void ofApp::mousePressed(int x, int y, int button)
+{
+	// Right button to select a sender
+	if (button == 2)
+		SelectSender();
+}
 
 //--------------------------------------------------------------
 void ofApp::exit() {
@@ -522,3 +504,66 @@ void ofApp::exit() {
 	ndiReceiver.ReleaseReceiver();
 }
 
+//
+// Sender list selection dialog
+//
+bool ofApp::SelectSender()
+{
+	// Refresh the NDI sources and get the sender count
+	ndiReceiver.FindSenders();
+
+	// Create a local sender list
+	std::vector<std::string> senderlist = ndiReceiver.GetSenderList();
+	if (!senderlist.empty()) {
+
+#if defined(TARGET_WIN32)
+		// MessageDialog with combobox returns the item index
+		// No icon to give a wider combo-box for long names
+		int selected = ndiReceiver.GetSenderIndex();
+		if (MessageDialog(ofGetWin32Window(), NULL, "Select sender", MB_OKCANCEL, senderlist, selected) == IDOK) {
+			// Update the receiver with the returned index
+			// another one is created from the selected index by ReceiveImage
+			// Returns false if the current sender is selected
+			if (ndiReceiver.SetSenderIndex(selected)) {
+				std::cout << "Selected [" << ndiReceiver.GetSenderName(selected) << "]" << std::endl;
+				// Stop and close soundstream
+				soundStream.close();
+				// Re-set to match the sender audio data
+				bSoundStream = false;
+				// Clear audio data
+				audioBuffer.clear();
+				lAudio.clear();
+				rAudio.clear();
+				writeIndex = 0;
+				readIndex = 0;
+				availableSamples = 0;
+				bAudioReceived = false;
+			}
+			else
+				std::cout << "Same sender" << std::endl;
+		}
+		return true;
+#else
+		// print senders to the console
+		int nsenders = ndiReceiver.GetSenderCount();
+		std::cout << "\nNumber of NDI senders found: " << nsenders << std::endl;
+		for (size_t i = 0; i < senderlist.size(); i++) {
+			std::cout << "    Sender " << i << " [" << senderlist[i].c_str() << "]" << std::endl;
+		}
+		if (nsenders > 1)
+			std::cout << "Press key [0] to [" << nsenders - 1 << "] to select a sender" << std::endl;
+
+#endif
+	}
+	else {
+#if defined(TARGET_WIN32)
+		// Add a caption 'X' for cancel like a conventional MessageBox
+		ofxNDIutils::MessageDialogCancel(true);
+		ofxNDIutils::MessageDialog(ofGetWin32Window(), "No senders found", "Warning", MB_OK | MB_ICONWARNING);
+#else
+		std::cout << "No senders found" << std::endl;
+#endif
+	}
+	// No senders
+	return false;
+}

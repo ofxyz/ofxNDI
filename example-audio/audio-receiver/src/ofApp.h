@@ -38,6 +38,8 @@ class ofApp : public ofBaseApp{
 		void draw();
 		void exit();
 		void keyPressed(int key);
+		void mousePressed(int x, int y, int button);
+		bool SelectSender();
 		void audioOut(ofSoundBuffer &output);
 
 		void ShowInfo();
@@ -59,14 +61,14 @@ class ofApp : public ofBaseApp{
 		size_t readIndex = 0;
 		size_t bufferCapacity = 0;
 		size_t availableSamples = 0;
+		vector<float> audioBuffer;  // Buffer for the audio data
+		std::mutex audioMutex;
+		int bufferSize = 0;         // Buffer size (change with sample number)
 
 		ofSoundStream soundStream;  // Audio stream to send sound to speakers
 		bool SetupSoundStream();
 		bool bSoundStream = false;
 		bool bAudioReceived = false;
-		vector<float> audioBuffer;  // Buffer for the audio data
-		std::mutex audioMutex;
-		int bufferSize = 0;         // Buffer size (change with sample number)
 
 		// For drawing the audio db bar graph and waveform
 		vector<float> lAudio;
