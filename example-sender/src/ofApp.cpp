@@ -4,7 +4,7 @@
 
 	NDI SDK https://ndi.video
 
-	Copyright (C) 2026 Lynn Jarvis.
+	Copyright (C) 2016-2026 Lynn Jarvis.
 	https://github.com/leadedge/ofxNDI
 	http://www.spout.zeal.co
 
