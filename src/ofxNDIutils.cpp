@@ -66,6 +66,10 @@
 			   ofxNDI version 2.001.000
 	09-02-26 - Add Audio functions
 	03-03-26 - ofxNDI version 2.002.000
+	20-05-26 - Add MessageDialog functions
+			   from SpoutUtils - SpoutMessageBox
+			   Add MessageDialogCancel to add a caption 'X'
+			   Update ofxNDI version to 2.003.000
 
 */
 #include "ofxNDIutils.h"
@@ -82,7 +86,7 @@ namespace ofxNDIutils {
 
 	// ofxNDI version number string
 	// Major, minor, release
-	std::string ofxNDIversion = "2.002.000";
+	std::string ofxNDIversion = "2.003.000";
 
 #ifdef USE_CHRONO
 	// Timing counters
@@ -822,7 +826,738 @@ namespace ofxNDIutils {
 		}
 		return planar;
 	}
+
+
+
+//
+// MessageDialog - Windows only
+// From SpoutUtils - SpoutMessageBox
+//
+#if defined(TARGET_WIN32)
+
+	//
+	// Group: MessageDialog
+	//
+
+	// ---------------------------------------------------------
+	// Function: MessageDialog
+	// MessageBox dialog with optional timeout.
+	// The dialog closes itself if a timeout is specified.
+	int MessageDialog(const char* message, DWORD dwMilliseconds)
+	{
+		if (!message)
+			return 0;
+		
+		return MessageTaskDialog(NULL, message, "Message", MB_OK, dwMilliseconds);
+
+	}
+
+	// ---------------------------------------------------------
+	// Function: MessageDialog
+	// MessageBox with variable arguments
+	int MessageDialog(const char* caption, const char* format, ...)
+	{
+		std::string strmessage;
+		std::string strcaption;
+
+		// Construct the message
+		va_list args;
+		va_start(args, format);
+		char logChars[1024]{}; // The log string
+		vsprintf_s(logChars, 1024, format, args);
+		strmessage = logChars;
+		va_end(args);
+
+		if (caption && *caption)
+			strcaption = caption;
+		else
+			strcaption = "Message";
+
+		return MessageTaskDialog(NULL, strmessage.c_str(), strcaption.c_str(), MB_OK, 0);
 	
+	}
+
+	// ---------------------------------------------------------
+	// Function: MessageDialog
+	// MessageBox with variable arguments and icon, buttons
+	int MessageDialog(const char* caption, UINT uType, const char* format, ...)
+	{
+		std::string strmessage;
+		std::string strcaption;
+
+		// Construct the message
+		va_list args;
+		va_start(args, format);
+		char logChars[1024]{}; // The log string
+		vsprintf_s(logChars, 1024, format, args);
+		strmessage = logChars;
+		va_end(args);
+
+		if (caption && *caption)
+			strcaption = caption;
+		else
+			strcaption = "Message";
+
+		return MessageTaskDialog(NULL, strmessage.c_str(), strcaption.c_str(), uType, 0);
+	}
+
+	// ---------------------------------------------------------
+	// Function: MessageDialog
+	// Messagebox with standard arguments and optional timeout
+	// Replaces an existing MessageBox call.
+	int MessageDialog(HWND hwnd, LPCSTR message, LPCSTR caption, UINT uType, DWORD dwMilliseconds)
+	{
+		return MessageTaskDialog(hwnd, message, caption, uType, dwMilliseconds);
+	}
+
+	// ---------------------------------------------------------
+	// Function: MessageDialog
+	// MessageBox dialog with standard arguments
+	// including taskdialog main instruction large text
+	int MessageDialog(HWND hwnd, LPCSTR message, LPCSTR caption, UINT uType, const char* instruction, DWORD dwMilliseconds)
+	{
+		// Set global main instruction
+		int size_needed = MultiByteToWideChar(CP_UTF8, 0, instruction, (int)strlen(instruction), NULL, 0);
+		wstrInstruction.resize(size_needed);
+		MultiByteToWideChar(CP_UTF8, 0, instruction, (int)strlen(instruction), &wstrInstruction[0], size_needed);
+
+		return MessageTaskDialog(hwnd, message, caption, uType, dwMilliseconds);
+
+	}
+	
+	// ---------------------------------------------------------
+	// Function: MessageDialog
+	// MessageBox dialog with edit control for text input
+	// Can be used in place of a specific application resource dialog
+	//   o For message content, the control is in the footer area
+	//   o If no message, the control is in the main content area
+	//   o All MessageDialog functions such as user icon and buttons are available
+	int MessageDialog(HWND hwnd, LPCSTR message, LPCSTR caption, UINT uType, std::string& text)
+	{
+		// For edit control creation
+		bEdit = true;
+
+		// A timeout value of 1000000 signals the Taskdialog callback of message content.
+		// The dialog times out after 1000 seconds but is effectively modal.
+		DWORD dwTimeout = 0;
+		std::string content = "";
+		if (message && *message) {
+			dwTimeout = 1000000;
+			content = message;
+		}
+
+		// Set initial text for edit control
+		stredit = text;
+		int iret = MessageTaskDialog(hwnd, content.c_str(), caption, uType, dwTimeout);
+		// Get text from global edit control string
+		text = stredit;
+		stredit.clear();
+		bEdit = false;
+		return iret;
+	}
+
+	// ---------------------------------------------------------
+	// Function: MessageDialog
+	// MessageBox dialog with a combobox control for item selection
+	// Can be used in place of a specific application resource dialog
+	// Properties the same as the edit control
+	int MessageDialog(HWND hwnd, LPCSTR message, LPCSTR caption, UINT uType,
+		std::vector<std::string> items, int& index)
+	{
+		// For combobox creation
+		bCombo = true;
+
+		// Timeout value to signal the Taskdialog callback of message content.
+		DWORD dwTimeout = 0;
+		std::string content = "";
+		if (message && *message) {
+			dwTimeout = 1000000;
+			content = message;
+		}
+
+		// Set taskdialog combo box items vector and selected index
+		comboitems = items;
+		comboindex = index;
+		int iret = MessageTaskDialog(hwnd, content.c_str(), caption, uType, dwTimeout);
+		index = comboindex;
+		comboitems.clear();
+		comboindex = 0;
+		bCombo = false;
+		return iret;
+
+	}
+
+	// ---------------------------------------------------------
+	// Function: MessageDialogIcon
+	// Custom icon for MessageDialog from resources
+	// Use together with MB_USERICON
+	void MessageDialogIcon(HICON hIcon)
+	{
+		hTaskIcon = hIcon;
+	}
+
+	// ---------------------------------------------------------
+	// Function: MessageDialogIcon
+	// Custom icon for MessageDialog from file
+	// Use together with MB_USERICON
+	bool MessageDialogIcon(std::string iconfile)
+	{
+		hTaskIcon = reinterpret_cast<HICON>(LoadImageA(nullptr, iconfile.c_str(), IMAGE_ICON, 0, 0, LR_LOADFROMFILE));
+		return (hTaskIcon != nullptr);
+	}
+
+	// ---------------------------------------------------------
+	// Function: MessageDialogButton
+	// Custom button for MessageDialog
+	void MessageDialogButton(int ID, std::wstring title)
+	{
+		TDbuttonID.push_back(ID);
+		TDbuttonTitle.push_back(title);
+	}
+
+	// ---------------------------------------------------------
+	// Function: MessageDialogWindow
+	// Window handle for MessageDialog where not specified
+	void MessageDialogWindow(HWND hWnd)
+	{
+		hwndMain = hWnd;
+	}
+
+	// ---------------------------------------------------------
+	// Function: MessageDialogPosition
+	// Position to centre MessageDialog
+	void MessageDialogPosition(POINT pt)
+	{
+		TDcentre = pt;
+	}
+
+	// ---------------------------------------------------------
+	// Function: MessageDialogCancel
+	// Adds an 'X' to the caption for MB_OK and MB_YESNO
+	// to align with the behaviour of a conventional MessageBox.
+	// Allows close and cancel with :
+	//   Esc, Alt+F4 or the caption X
+	// Closing in this way returns IDCANCEL
+	//       true    - add 'X'
+	//       false   - remove 'X'
+	//       default - add 'X' only if there is a CANCEL button
+	void MessageDialogCancel(bool bCancel)
+	{
+		if(bCancel)
+			nAllowCancel =  1; // Add 'X'
+		else
+			nAllowCancel = -1; // Remove 'X'
+	}
+
+
+	//
+	// Private functions
+	//
+	namespace {
+
+		//
+		//
+		//
+		// MessageBox replacement
+		// 
+		// https://learn.microsoft.com/en-us/windows/win32/api/commctrl/ns-commctrl-taskdialogconfig
+		//
+		int MessageTaskDialog(HWND hWnd, const char* content, const char* caption, DWORD dwButtons, DWORD dwMilliseconds) {
+
+			// Return if TaskDialog is already open
+			if (hwndTask) {
+				return 0;
+			}
+
+			// Window handle is HWND passed in or specified by MessageDialogWindow
+			if (hwndMain)
+				hWnd = hwndMain;
+
+			// hinstance of the window
+			HINSTANCE hInst = nullptr;
+			if (hWnd) hInst = (HINSTANCE)GetWindowLongPtrA(hWnd, GWLP_HINSTANCE);
+
+			// Use a custom icon if set
+			if (hTaskIcon) dwButtons |= MB_USERICON;
+
+			//
+			// Drop through for modal TaskDialogIndirect
+			// or MessageBox for compilers other than Visual Studio
+			//
+
+			//
+			// Visual Studio TaskDialogIndirect
+			//
+
+			// User buttons
+			TASKDIALOG_BUTTON buttons[10]{};
+
+			// Use a wide string to avoid a pre-sized buffer
+			std::wstring wstrTemp;
+			if (content) {
+				int size_needed = MultiByteToWideChar(CP_UTF8, 0, content, (int)strlen(content), NULL, 0);
+				wstrTemp.resize(size_needed);
+				MultiByteToWideChar(CP_UTF8, 0, content, (int)strlen(content), &wstrTemp[0], size_needed);
+			}
+
+
+			// Caption (default caption is the executable name)
+			std::wstring wstrCaption;
+			if (caption) {
+				int size_needed = MultiByteToWideChar(CP_UTF8, 0, caption, (int)strlen(caption), NULL, 0);
+				wstrCaption.resize(size_needed);
+				MultiByteToWideChar(CP_UTF8, 0, caption, (int)strlen(caption), &wstrCaption[0], size_needed);
+			}
+
+			// Hyperlinks can be included in the content using HTML format.
+			// For example : 
+			// <a href=\"https://spout.zeal.co/\">Spout home page</a>
+			// Only double quotes are supported and must be escaped.
+
+			// Topmost global flag
+			bTopMost = ((dwButtons & MB_TOPMOST) != 0);
+			LONG dwl = (LONG)dwButtons;
+			if (bTopMost)
+				dwl = dwl ^ MB_TOPMOST;
+
+			//
+			// Buttons
+			//
+			DWORD dwb = dwl & 0x0F; // buttons code
+			DWORD dwCommonButtons = MB_OK;
+			//
+			// User buttons
+			//
+			if (TDbuttonID.size() > 0) {
+				int i = 0;
+				for (i=0; i < (int)TDbuttonID.size(); i++) {
+					buttons[i].nButtonID = TDbuttonID[i];
+					buttons[i].pszButtonText = TDbuttonTitle[i].c_str();
+				}
+				if ((dwButtons & MB_CANCEL) == MB_CANCEL) {
+					buttons[i].nButtonID = IDCANCEL;
+					buttons[i].pszButtonText = L"Cancel";
+				}
+				else {
+					// Final button default is OK
+					// YES/NO etc have to be added as buttons
+					buttons[i].nButtonID = IDOK;
+					buttons[i].pszButtonText = L"OK";
+				}
+			}
+			else {
+				//
+				// Common buttons
+				//
+				// https://learn.microsoft.com/en-us/windows/win32/api/commctrl/nf-commctrl-taskdialog
+				// TDCBF_OK_BUTTON     1
+				// TDCBF_YES_BUTTON    2
+				// TDCBF_NO_BUTTON     4
+				// TDCBF_CANCEL_BUTTON 8
+				// MB_OK          0x00
+				// MB_OKCANCEL    0x01
+				// MB_YESNOCANCEL 0x03
+				// MB_YESNO       0x04
+				if (dwb == MB_YESNO) { // 4
+					dwCommonButtons = TDCBF_YES_BUTTON | TDCBF_NO_BUTTON;
+				}
+				else if (dwb == MB_YESNOCANCEL) { // 3
+					dwCommonButtons = TDCBF_YES_BUTTON | TDCBF_NO_BUTTON | TDCBF_CANCEL_BUTTON;
+				}
+				else if (dwb == MB_OKCANCEL) { // 1
+					dwCommonButtons = TDCBF_OK_BUTTON | TDCBF_CANCEL_BUTTON;
+				}
+				else {
+					dwCommonButtons = MB_OK;
+				}
+			}
+			
+			//
+			// Icons
+			//
+			// Icons available
+			// TD_WARNING_ICON, TD_ERROR_ICON, TD_INFORMATION_ICON, TD_SHIELD_ICON
+			//
+			// Icons to allow for
+			// MB_ICONSTOP         0x10
+			// MB_ICONERROR        0x10
+			// MB_ICONHAND         0x10
+			// MB_ICONQUESTION     0x20
+			// MB_ICONEXCLAMATION  0x30
+			// MB_ICONWARNING      0x30
+			// MB_ICONINFORMATION  0x40
+			// MB_ICONASTERISK     0x40
+			// MB_USERICON         0x80
+			//
+			HICON hMainIcon = NULL; // No user icon
+			WCHAR* wMainIcon = nullptr; // No resource icon
+			dwl = dwl & 0xF0; // remove buttons for icons
+			if (dwl == MB_USERICON && hTaskIcon) {
+				// Private SpoutUtils icon handle set by MessageDialogIcon
+				hMainIcon = hTaskIcon;
+				wMainIcon = nullptr;
+			}
+			else {
+				switch (dwl) {
+					case MB_ICONINFORMATION: // 0x40
+						wMainIcon = TD_INFORMATION_ICON;
+						break;
+					case MB_ICONWARNING: // 0x30
+						wMainIcon = TD_WARNING_ICON;
+						break;
+					case MB_ICONQUESTION: // 0x20
+						wMainIcon = TD_INFORMATION_ICON;
+						break;
+					case MB_ICONERROR: // 0x10
+						wMainIcon = TD_ERROR_ICON;
+						break;
+					default:
+						// No icon specified
+						wMainIcon = nullptr;
+						break;
+				}
+			}
+
+			int nButtonPressed        = 0;
+			int nRadioButton          = 0;
+			TASKDIALOGCONFIG config   = { 0 };
+			config.cbSize             = sizeof(config);
+			config.hwndParent         = hWnd;
+			config.hInstance          = hInst;
+			config.pszWindowTitle     = wstrCaption.c_str();
+			config.hMainIcon          = hMainIcon;
+			if (!hMainIcon)
+				config.pszMainIcon    = wMainIcon; // Important to remove this
+			config.pszMainInstruction = wstrInstruction.c_str();
+			if (content) {
+				config.pszContent         = wstrTemp.c_str();
+			}
+
+			// User buttons in TASKDIALOG_BUTTON buttons
+			// Otherwise use common buttons
+			config.nDefaultButton = IDOK;
+
+			if (TDbuttonID.size() > 0) {
+				config.pButtons = buttons;
+				config.cButtons = (UINT)TDbuttonID.size() + 1; // Includes OK button
+			}
+			else {
+				config.dwCommonButtons = dwCommonButtons;
+			}
+
+			config.cxWidth            = 0; // auto width - requires TDF_SIZE_TO_CONTENT
+
+			// TDF_POSITION_RELATIVE_TO_WINDOW Indicates that the task dialog is
+			// centered relative to the window specified by hwndParent.
+			// If hwndParent is NULL, the dialog is centered on the monitor.
+			config.dwFlags  = TDF_POSITION_RELATIVE_TO_WINDOW | TDF_SIZE_TO_CONTENT | TDF_CALLBACK_TIMER | TDF_ENABLE_HYPERLINKS;
+			if ((dwButtons & MB_RIGHT) == MB_RIGHT)
+				config.dwFlags |= TDF_RTL_LAYOUT;
+
+			if (hMainIcon)
+				config.dwFlags        |= TDF_USE_HICON_MAIN; // User icon
+			config.pfCallback         = reinterpret_cast<PFTASKDIALOGCALLBACK>(TDcallbackProc);
+			config.lpCallbackData     = reinterpret_cast<LONG_PTR>(&dwMilliseconds);
+
+			// Adds an 'X' to the caption without a CANCEL button
+			// Allows close and cancel with : Esc, Alt+F4 or 'X'
+			// Closing in this way returns IDCANCEL.
+			if(nAllowCancel == 1)
+				config.dwFlags  |= TDF_ALLOW_DIALOG_CANCELLATION;
+
+			if (bTopMost) {
+				// Get the first visible window in the Z order
+				hwndTop = GetForegroundWindow();
+				HWND hwndParent = GetParent(hwndTop); // Is it a dialog
+				if (hwndParent) hwndTop = hwndParent;
+				// Is it topmost ?
+				if ((GetWindowLong(hwndTop, GWL_EXSTYLE) & WS_EX_TOPMOST) > 0) {
+					// Move it down
+					SetWindowPos(hwndTop, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+				}
+				else {
+					hwndTop = NULL;
+				}
+			}
+
+			TaskDialogIndirect(&config, &nButtonPressed, &nRadioButton, NULL);
+
+			if (bTopMost && hwndTop) {
+				// Reset the window that was topmost before
+				SetWindowPos(hwndTop, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+				hwndTop = NULL;
+			}
+
+			// Clear global main instruction
+			wstrInstruction.clear();
+
+			// Clear custom buttons
+			TDbuttonID.clear();
+			TDbuttonTitle.clear();
+
+			// Clear custom icon handle set by MessageDialogIcon and activated by MB_USERICON
+			// Use before calling any of the MessageDialog functions
+			hTaskIcon = nullptr;
+
+			// Clear dialog user position
+			TDcentre.x = 0;
+			TDcentre.y = 0;
+
+			// Clear caption cancel option
+			nAllowCancel = 0;
+
+			// Return button pressed
+			// IDCANCEL, IDNO, IDOK, IDRETRY, IDYES
+			// or custom button ID
+			return nButtonPressed;
+		}
+
+		HRESULT TDcallbackProc(HWND hwnd, UINT uNotification, WPARAM wParam, LPARAM lParam, LONG_PTR dwRefData)
+		{
+			if (uNotification == TDN_CREATED) {
+
+				// Taskdialog window open
+				hwndTask = hwnd;
+
+				// For general use
+				RECT rect{};
+				int x, y, w, h = 0;
+
+				// hInstance of task dialog
+				HINSTANCE hInstTD = (HINSTANCE)GetWindowLongPtrA(hwnd, GWLP_HINSTANCE);
+
+				// Timeout
+				DWORD* pTimeout = reinterpret_cast<DWORD*>(dwRefData); // = tc.lpCallbackData
+
+				// Remove icons from the caption
+				// An icon appears in the caption when using MB_OKCANCEL
+				// or when an icon is set for the taskdialog content
+				SendMessage(hwnd, WM_SETICON, ICON_BIG, NULL);
+				SendMessage(hwnd, WM_SETICON, ICON_SMALL, NULL);
+
+				// TODO
+				// For an icon in the caption instead of the dialog window
+				// Disable :
+				//     if (hTaskIcon) dwButtons |= MB_USERICON;
+				// Add :
+				//     SendMessage(hwnd, WM_SETICON, ICON_BIG, (LPARAM)hTaskIcon);
+				//     SendMessage(hwnd, WM_SETICON, ICON_SMALL, (LPARAM)hTaskIcon);
+
+				// Remove 'X' from the caption
+				if (nAllowCancel == -1) {
+			        LONG style = GetWindowLong(hwnd, GWL_STYLE);
+					style &= ~WS_SYSMENU; // Remove system menu (includes 'X')
+					SetWindowLong(hwnd, GWL_STYLE, style);
+				}
+
+				// Dialog Window size and position
+				GetWindowRect(hwnd, &rect);
+				x = rect.left;
+				y = rect.top;
+				w = rect.right - rect.left;
+				h = rect.bottom - rect.top;
+
+				// Centre the taskdialog window on the point
+				// if MessageDialogPosition has been used
+				if (TDcentre.x > 0 || TDcentre.y > 0) {
+					// Offset to the centre of the window
+					x = TDcentre.x - (w / 2);
+					y = TDcentre.y - (h / 2);
+				}
+
+				if (bTopMost)
+					SetWindowPos(hwnd, HWND_TOPMOST, x, y, w, h, SWP_NOSIZE);
+				else
+					SetWindowPos(hwnd, HWND_NOTOPMOST, x, y, w, h, SWP_NOSIZE);
+
+				// Edit text control
+				if (bEdit) {
+
+					// Position in the main content by default
+					GetClientRect(hwnd, &rect);
+
+					// Taskdialog client size is larger with an icon
+					h = rect.bottom - rect.top;
+					x = rect.left + 70;
+					y = rect.top + 3;
+					// Allow for increased height with an icon
+					if (h > 90) y += 20;
+					w = 320;
+					h = 24;
+
+					// Look for a timeout of 1000000 as a signal for message content
+					// and position in the the footer area if so.
+					if (*pTimeout && *pTimeout == 1000000) {
+						x = rect.left + 10;
+						y = rect.bottom - 38;
+						w = 220;
+					}
+
+					hEdit = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
+						WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL,
+						x, y, w, h, hwnd, (HMENU)IDC_TASK_EDIT, hInstTD, NULL);
+
+					// Set an initial entry in the edit box
+					if (!stredit.empty()) {
+						SetWindowTextA(hEdit, (LPCSTR)stredit.c_str());
+						// Select all text in the edit field
+						SendMessage(hEdit, EM_SETSEL, 0, 0x7FFF0000L);
+					}
+
+					// Position on top of content
+					BringWindowToTop(hEdit);
+
+					// Set keyboard focus to allow user entry
+					SetFocus(hEdit);
+
+				}
+
+				// Combo box control
+				if (bCombo) {
+
+					// Position in the main content by default
+					GetClientRect(hwnd, &rect);
+
+					// Taskdialog client size
+					// h = rect.bottom-rect.top;
+					h = rect.bottom - rect.top;
+					x = rect.left + 20;
+					y = rect.top;
+					w = 395;
+
+					// Find combo box width from the longest item string
+					LONG maxw = 0L;
+					if (comboitems.size() > 0) {
+						HDC hdc = GetDC(hwnd);
+						HFONT hFont = (HFONT)SendMessage(hwnd, WM_GETFONT, 0, 0);
+						SelectObject(hdc, hFont);
+						for (int i = 0; i < (int)comboitems.size(); i++) {
+							// Text width for the current string
+							SIZE size;
+							GetTextExtentPoint32A(hdc, (LPCSTR)comboitems[i].c_str(), (int)comboitems[i].size(), &size);
+							if (size.cx > maxw)
+								maxw = size.cx;
+						}
+						ReleaseDC(hwnd, hdc);
+						// Add padding for the combo box button
+						maxw += 35;
+					}
+
+					// Adjust to the maximum width required
+					w = 0;
+					if (maxw > 0)
+						w = (int)maxw;
+					if (w < 200) w = 200; // Minimum combo width
+					int dw = rect.right - rect.left;
+					if (w < dw) {
+						// If the width is less than the dialog adjust the x position 
+						x = (dw - w) / 2;
+						if (*pTimeout && *pTimeout == 1000000) {
+							// Position in the footer area if there is message content
+							// Less width due to buttons
+							x = rect.left + 10;
+							y = rect.bottom - 40;
+							w = 220; // Fixed width
+						}
+						else if (h > 90) { // Increased client size for icon
+							// Allow for increased height and position further right
+							y += 20;
+							if (x < 20) {
+								x += 40;
+								w -= 40;
+							}
+						}
+					}
+					else {
+						// If the width is larger, reduce to fit the dialog
+						w = dw - 4;
+						x = 2;
+					}
+
+					// Combo box inital height. Changed by content.
+					h = 100;
+
+					// Use CBS_DROPDOWNLIST style for list only
+					hCombo = CreateWindowExA(WS_EX_CLIENTEDGE, "COMBOBOX", "",
+						CBS_DROPDOWNLIST | CBS_HASSTRINGS | WS_CHILD | WS_OVERLAPPED | WS_VISIBLE,
+						x, y, w, h, hwnd, (HMENU)IDC_TASK_COMBO, hInstTD, NULL);
+
+					// Add combo box items
+					if (comboitems.size() > 0) {
+						for (int i = 0; i < (int)comboitems.size(); i++) {
+							SendMessageA(hCombo, (UINT)CB_ADDSTRING, (WPARAM)0, (LPARAM)comboitems[i].c_str());
+						}
+						// Display an initial item in the selection field
+						SendMessageA(hCombo, CB_SETCURSEL, (WPARAM)comboindex, (LPARAM)0);
+					}
+
+					// Remove icons from the caption
+					SendMessage(hwnd, WM_SETICON, ICON_BIG, NULL);
+					SendMessage(hwnd, WM_SETICON, ICON_SMALL, NULL);
+
+					// Position on top of content
+					BringWindowToTop(hCombo);
+
+				}
+
+			}
+
+			if (uNotification == TDN_DESTROYED) {
+
+				// Taskdialog window closed
+				hwndTask = nullptr;
+
+				if (bEdit) {
+					// Get text from edit control
+					char text[MAX_PATH]{};
+					GetWindowTextA(hEdit, text, MAX_PATH);
+					// Move to global string for return
+					stredit = text;
+				}
+
+				if (bCombo) {
+					// Get currently selected index
+					// Allow for error if the user edits the list item
+					int index = (int)SendMessageA(hCombo, (UINT)CB_GETCURSEL, (WPARAM)0, (LPARAM)0);
+					if (index != CB_ERR) {
+						comboindex = index;
+					}
+				}
+			}
+
+			// Timeout
+			if (uNotification == TDN_TIMER) {
+				DWORD* pTimeout = reinterpret_cast<DWORD*>(dwRefData);  // = tc.lpCallbackData
+				DWORD timeElapsed = static_cast<DWORD>(wParam);
+				if (*pTimeout && timeElapsed >= *pTimeout) {
+					*pTimeout = 0; // Make sure we don't send the button message multiple times.
+					SendMessage(hwnd, TDM_CLICK_BUTTON, IDOK, 0);
+				}
+			}
+
+			// Hyperlink
+			//   TDN_HYPERLINK_CLICKED indicates that a hyperlink has been selected.
+			//   lParam - Pointer to a wide-character string containing the URL of the hyperlink.
+			if (uNotification == TDN_HYPERLINK_CLICKED) {
+				SHELLEXECUTEINFOW sei{};
+				sei.cbSize = sizeof(sei);
+				sei.hwnd = NULL;
+				sei.lpVerb = L"open";
+				sei.lpFile = (LPCWSTR)lParam;
+				sei.nShow = SW_SHOWNORMAL;
+				if (!ShellExecuteExW(&sei)) {
+					return S_FALSE;
+				}
+				SendMessage(hwnd, TDM_CLICK_BUTTON, IDOK, 0);
+			}
+
+			return 0; // S_OK
+
+		}
+
+	} // endif private namespace
+
+#endif // End MessageDialog for Windows
 
 #endif
 

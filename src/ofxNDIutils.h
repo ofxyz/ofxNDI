@@ -34,6 +34,7 @@
 			 - Add NOMINMAX define to avoid conflict for
 			   std::min/std::max and Windows min/max
 	23.02.26 - Add audio functions AudioFrameSequence and InterleavedToPlanar
+	20-05-26 - Add MessageDialog functions
 
 */
 #pragma once
@@ -46,7 +47,7 @@
 #include "ofxNDIplatforms.h" // Openframeworks platform definitions
 #include <stdint.h> // ints of known sizes, standard library
 #include <stdlib.h>
-#include <string.h>
+#include <string>
 #include <iostream> // for cout
 #include <vector>
 #include <cmath>     // for std::floor, std::ceil
@@ -71,6 +72,23 @@
 #include <cstring>
 #include <climits>
 
+// MessageDialog - windows only
+#if defined(TARGET_WIN32)
+
+#include <commctrl.h>
+#pragma comment(lib, "comctl32.lib")
+
+// TaskDialog requires comctl32.dll version 6
+#ifdef _MSC_VER
+// https://learn.microsoft.com/en-us/windows/win32/controls/cookbook-overview
+#pragma comment(linker,"\"/manifestdependency:type='win32' \
+name='Microsoft.Windows.Common-Controls' version='6.0.0.0' \
+processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
+#endif
+
+#endif
+
+
 //
 // C++11 timer is only available for MS Visual Studio 2015 and above.
 //
@@ -87,7 +105,6 @@
 #include <chrono> // c++11 timer
 #include <thread>
 #endif
-
 
 // For SetAudioType
 enum ofxNDIaudiotype {
@@ -168,6 +185,116 @@ namespace ofxNDIutils {
 	// Convert interleaved audio to a single planar buffer for NDI v2
 	std::vector<float> InterleavedToPlanar(const float* interleaved, int channels, int nsamples);
 	static std::vector<float> planar;
+
+	
+//
+// MessageDialog - Windows only
+// From SpoutUtils - SpoutMessageBox
+//
+#if defined(TARGET_WIN32)
+
+	//
+	// Private variables and functions
+	//
+	namespace {
+
+		// Application window
+		HWND hwndMain = NULL; // Taskdialog window to prevent multiple open
+		HWND hwndTask = NULL; // Position for TaskDialog window centre
+		POINT TDcentre = {};
+		HWND hwndTop = NULL;
+		bool bTopMost = false; // For topmost
+		int nAllowCancel = 0; // Caption 'X' for cancel
+		HICON hTaskIcon = NULL; // For custom icon
+		// For custom buttons
+		std::vector<int>TDbuttonID;
+		std::vector<std::wstring>TDbuttonTitle;
+		std::wstring wstrInstruction; // Main instruction text
+		// For edit text control
+		bool bEdit = false;
+		HWND hEdit = NULL;
+		std::string stredit;
+		#define IDC_TASK_EDIT 101
+		// For combo box control
+		bool bCombo = false;
+		HWND hCombo = NULL;
+		std::vector<std::string> comboitems;
+		int comboindex = 0;
+		#define IDC_TASK_COMBO 102
+		// For cancel button only together with custom buttons
+		#define MB_CANCEL TDCBF_CANCEL_BUTTON
+
+		// Taskdialog for MessageDialog
+		int MessageTaskDialog(HWND hWnd, const char* content, const char* caption, DWORD dwButtons, DWORD dwMilliseconds);
+
+		// TaskDialogIndirect callback to handle timer, topmost and hyperlinks
+		HRESULT TDcallbackProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam, LONG_PTR lpRefData);
+
+	}
+
+
+	// MessageBox dialog with optional timeout.
+	// The dialog closes itself if a timeout is specified.
+	int MessageDialog(const char* message, DWORD dwMilliseconds = 0);
+
+	// MessageBox with variable arguments
+	int MessageDialog(const char* caption, const char* format, ...);
+	
+	// MessageBox with variable arguments and icon, buttons
+	int MessageDialog(const char* caption, UINT uType, const char* format, ...);
+
+	// MessageBox dialog with standard arguments.
+	// Replaces an existing MessageBox call.
+	// uType options : standard MessageBox buttons and icons
+	// MB_USERICON - use together with MessageDialogIcon
+	// Hyperlinks can be included in the content using HTML format.
+	// For example : <a href=\"https://spout.zeal.co/\">Spout home page</a>
+	// Only double quotes are supported and must be escaped.
+	int MessageDialog(HWND hwnd, LPCSTR message, LPCSTR caption, UINT uType, DWORD dwMilliseconds = 0);
+
+	// MessageBox dialog with standard arguments
+	// including taskdialog main instruction large text
+	int MessageDialog(HWND hwnd, LPCSTR message, LPCSTR caption,  UINT uType, const char* instruction, DWORD dwMilliseconds = 0);
+
+	// MessageBox dialog with an edit control for text input
+	// Can be used in place of a specific application resource dialog
+	//   o For message content, the control is in the footer area
+	//   o If no message, the control is in the main content area
+	//   o All MessageDialog functions such as user icon and buttons are available
+	int MessageDialog(HWND hwnd, LPCSTR message, LPCSTR caption, UINT uType, std::string& text);
+
+	// MessageBox dialog with a combobox control for item selection
+	// Can be used in place of a specific application resource dialog
+	// Properties the same as the edit control
+	int MessageDialog(HWND hwnd, LPCSTR message, LPCSTR caption, UINT uType,
+		std::vector<std::string> items, int &selected);
+
+	// Custom icon for MessageDialog from resources
+	void MessageDialogIcon(HICON hIcon);
+
+	// Custom icon for MessageDialog from file
+	bool MessageDialogIcon(std::string iconfile);
+
+	// Custom button for MessageDialog
+	void MessageDialogButton(int ID, std::wstring title);
+
+	// Window handle for MessageDialog where not specified
+	void MessageDialogWindow(HWND hWnd);
+
+	// Position to centre MessageDialog
+	void MessageDialogPosition(POINT pt);
+
+	// Allow dialog cancel
+	// Adds an 'X' to the caption
+	// and allows close and cancel with :
+	//   Esc, Alt+F4 or the caption X
+	// Closing in this way returns IDCANCEL.
+	//   true  - add 'X'
+	//   false - remove 'X'
+	void MessageDialogCancel(bool bCancel);
+
+#endif // End MessageDialog for Windows
+
 
 #endif
 
