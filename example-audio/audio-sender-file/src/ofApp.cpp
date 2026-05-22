@@ -241,7 +241,7 @@ void ofApp::DrawAudio()
 	float xpos  = 0.0f;
 	float lastx = 0.0f;
 
-	float spacing = (float)ofGetWidth()/(float)nSamples;
+	float spacing = (float)ofGetWidth()/(float)nSamples/2;
 	float y = (float)(ofGetHeight()/2); // Centre of the window
 	for (int i=0; i < nSamples*2; i+=2) { // Every second sample
 		xpos = (float)i*spacing;
@@ -251,7 +251,6 @@ void ofApp::DrawAudio()
 		lastx = xpos;
 		lasty = ypos;
 	}
-
 
 }
 
