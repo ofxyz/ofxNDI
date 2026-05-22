@@ -67,6 +67,7 @@
 	21.07.25	- Update headers to NDI version 6.2.0.3
 	21.10.25	- Update headers to NDI version 6.2.1.0
 	13.03.26	- Update headers to NDI version 6.3.1.0
+	22.05.26	- Update headers to NDI version 6.3.2.0
 
 */
 #include "ofxNDIdynloader.h"
