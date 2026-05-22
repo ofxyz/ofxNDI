@@ -4,7 +4,7 @@
 
 	NDI SDK https://ndi.video
 
-	Copyright (C) 2026 Lynn Jarvis.
+	Copyright (C) 2016-2026 Lynn Jarvis.
 	https://github.com/leadedge/ofxNDI
 	http://www.spout.zeal.co
 
@@ -89,6 +89,9 @@
 	16.05.26 - Add "B" to enable/disable alpha blending
 			   Equivalent Sender "B" background - transparent black or opaque blue
 			   Add background image for alpha blending
+	18.05.26 - Add MessageDialog functions to ofxNDIutils (Windows only)
+			   Right click for MessageDialog combobox to select a sender
+			   Revise ofxNDIreceive::CreateReceiver
 
 */
 #include "ofApp.h"
@@ -122,12 +125,10 @@ void ofApp::setup(){
 	ofSetWindowTitle("Openframeworks NDI receiver");
 
 #ifdef _WIN64
-	std::cout << "\nofxNDI example receiver - 64 bit" << std::endl;
+	std::cout << "ofxNDI example receiver - 64 bit" << std::endl;
 #else // _WIN64
-	std::cout << "\nofxNDI example receiver - 32 bit" << std::endl;
+	std::cout << "ofxNDI example receiver - 32 bit" << std::endl;
 #endif // _WIN64
-
-	std::cout << "Press 'SPACE' to list NDI senders" << std::endl;
 
 	// ofFbo
 	ndiFbo.allocate(ofGetWidth(), ofGetHeight(), GL_RGBA);
@@ -298,9 +299,9 @@ void ofApp::ShowInfo() {
 			str += " network sources";
 		}
 		if(bBackDraw)
-			ofDrawBitmapString("\"SPACE\" to list senders  :  \"B\" disable alpha blending", 20, ofGetHeight() - 20);
+			ofDrawBitmapString("Right click - select sender  :  \"b\" - disable alpha blending", 20, ofGetHeight() - 20);
 		else
-			ofDrawBitmapString("\"SPACE\" to list senders  :  \"B\" enable alpha blending", 20, ofGetHeight() - 20);
+			ofDrawBitmapString("Right click - select sender  :  \"b\" - enable alpha blending", 20, ofGetHeight() - 20);
 	}
 	else {
 		ofDrawBitmapString("Connecting . . .", 20, 30);
@@ -309,28 +310,11 @@ void ofApp::ShowInfo() {
 }
 
 //--------------------------------------------------------------
-void ofApp::keyPressed(int key) {
-
-	// Ignore if minimised
-	if (IsIconic(ofGetWin32Window()))
-		return;
-
+void ofApp::keyPressed(int key)
+{
 	char name[256]{};
 	int index = key - 48;
 	int nsenders = ndiReceiver.GetSenderCount();
-
-	// Space to show the sender list in a messagebox
-	if (key == ' ') {
-		SelectSender();
-	}
-	else if (nsenders > 0 && index >= 0 && index < nsenders) {
-		// Update the receiver with the returned index
-		// Returns false if the current sender is selected
-		if (ndiReceiver.SetSenderIndex(index))
-			std::cout << "Selected [" << ndiReceiver.GetSenderName(index) << "]" << std::endl;
-		else
-			std::cout << "Same sender" << std::endl;
-	}
 
 	// Alpha blending
 	if (key == 'b') {
@@ -342,7 +326,23 @@ void ofApp::keyPressed(int key) {
 				ofDisableAlphaBlending();
 		}
 	}
+	else if (nsenders > 0 && index >= 0 && index < nsenders) {
+		// Update the receiver with the returned index
+		// another one is created from the selected index by ReceiveImage
+		// Returns false if the current sender is selected
+		if (ndiReceiver.SetSenderIndex(index))
+			std::cout << "[" << ndiReceiver.GetSenderName(index) << "]" << std::endl;
+		else
+			std::cout << "Same sender" << std::endl;
+	}
 
+}
+
+void ofApp::mousePressed(int x, int y, int button)
+{
+	// Right button to select a sender
+	if (button == 2)
+		SelectSender();
 }
 
 //
@@ -352,27 +352,45 @@ bool ofApp::SelectSender()
 {
 	// Refresh the NDI sources and get the sender count
 	ndiReceiver.FindSenders();
+
 	// Create a local sender list
 	std::vector<std::string> senderlist = ndiReceiver.GetSenderList();
 	if (!senderlist.empty()) {
-		int selected = 0;
-		std::string str;
-		for (size_t i=0; i < senderlist.size(); i++) {
-			str += std::to_string(i);
-			str += " : [";
-			str += senderlist[i];
-			str += "]\n";
+
+#if defined(TARGET_WIN32)
+		// MessageDialog with combobox returns the item index
+		// No icon to give a wider combo-box for long names
+		int selected = ndiReceiver.GetSenderIndex();
+		if (MessageDialog(ofGetWin32Window(), NULL, "Select sender", MB_OKCANCEL, senderlist, selected) == IDOK) {
+			// Update the receiver with the returned index
+			// another one is created from the selected index by ReceiveImage
+			// Returns false if the current sender is selected
+			if (ndiReceiver.SetSenderIndex(selected))
+				std::cout << "Selected [" << ndiReceiver.GetSenderName(selected) << "]" << std::endl;
+			else
+				std::cout << "Same sender" << std::endl;
 		}
-		if (senderlist.size() > 1) {
-			str += "\nAfter closing this message box with OK\n";
-			str += "Press 0 to "; str += std::to_string(senderlist.size()-1);
-			str += " to select the required sender\n";
-		}
-		MessageBoxA(NULL, str.c_str(), "NDI senders", MB_OK);
 		return true;
+#else
+		// print senders to the console
+		int nsenders = ndiReceiver.GetSenderCount();
+		std::cout << "Number of NDI senders found: " << nsenders << std::endl;
+		for (size_t i = 0; i < senderlist.size(); i++) {
+			std::cout << "    Sender " << i << " [" << senderlist[i].c_str() << "]" << std::endl;
+		}
+		if (nsenders > 1)
+			std::cout << "Press key [0] to [" << nsenders - 1 << "] to select a sender" << std::endl;
+
+#endif
 	}
 	else {
-		MessageBoxA(NULL, "No senders found", "Warning", MB_OK | MB_ICONWARNING);
+#if defined(TARGET_WIN32)
+		// Add a caption 'X' for cancel like a conventional MessageBox
+		ofxNDIutils::MessageDialogCancel(true);
+		ofxNDIutils::MessageDialog(ofGetWin32Window(), "No senders found", "Warning", MB_OK | MB_ICONWARNING);
+#else
+		std::cout << "No senders found" << std::endl;
+#endif
 	}
 	// No senders
 	return false;

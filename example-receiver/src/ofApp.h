@@ -40,6 +40,7 @@ class ofApp : public ofBaseApp{
 		void draw();
 		void exit();
 		void keyPressed(int key);
+		void mousePressed(int x, int y, int button);
 		void ShowInfo();
 
 		ofxNDIreceiver ndiReceiver; // NDI receiver
