@@ -146,6 +146,8 @@ public:
 	// The received video frame is held in ofxReceive class.
 	// Use the video frame data pointer externally with GetVideoData()
 	// For success, the video frame must be freed with FreeVideoData().
+	//
+	bool ReceiveImage();
 	// - width | received image width
 	// - height | received image height
 	bool ReceiveImage(unsigned int &width, unsigned int &height);

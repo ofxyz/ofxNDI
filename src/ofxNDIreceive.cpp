@@ -171,6 +171,9 @@
 			   FindSenders - allow for no senders left
 	02-05-26 - GetSenderCount() - Add FindSenders so that the function
 			   can be called independently of ReceiveImage
+	22.05.26 - Add ReceiveImage overload for no arguments
+			   Revise CreateReceiver
+
 
 */
 
@@ -783,7 +786,6 @@ bool ofxNDIreceive::OpenReceiver()
 
 }
 
-
 // Create a receiver
 // If the NDI format is BGRA and the application format is RGBA,
 // data is converted from BGRA to RGBA during copy from the video frame buffer.
@@ -809,7 +811,6 @@ bool ofxNDIreceive::CreateReceiver(NDIlib_recv_color_format_e colorFormat , int 
 	// selected by the user from a list of senders currently running
 	// or -1 if no index has been selected.
 	int index = userindex;
-
 	if (!pNDI_recv) {
 
 		// Check existing sources in case of connection trouble
@@ -826,15 +827,26 @@ bool ofxNDIreceive::CreateReceiver(NDIlib_recv_color_format_e colorFormat , int 
 			// Quit if the user selected index is greater than the number of sources
 			// Unlikely but safety.
 			if (userindex > (int)no_sources-1) {
-				printf("ofxNDIreceive::CreateReceiver - user selected index is greater than the number of sources\n");
 				return false;
 			}
-
+			
+			// Release the receiver if not done already
+			if (bReceiverCreated) {
+				ReleaseReceiver();
+			}
+			
 			// If no index has been specified (-1), use the currently set index
 			// "senderIndex" is either initialized as "0", the first sender,
 			// or it is still set to the previous sender index.
-			if (userindex < 0)
+			if (userindex < 0) {
 				index = m_senderIndex;
+			}
+			else if(m_senderIndex != index) {
+				// If the index has not been set by SetSenderIndex
+				// set it now and clear the sender name
+				m_senderIndex = index;
+				m_senderName.clear();
+			}
 
 			// Rebuild the name list
 			NDIsenders.clear();
@@ -844,11 +856,6 @@ bool ofxNDIreceive::CreateReceiver(NDIlib_recv_color_format_e colorFormat , int 
 						NDIsenders.push_back(p_sources[i].p_ndi_name);
 					}
 				}
-			}
-
-			// Release the receiver if not done already
-			if (bReceiverCreated) {
-				ReleaseReceiver();
 			}
 
 			//
@@ -873,7 +880,6 @@ bool ofxNDIreceive::CreateReceiver(NDIlib_recv_color_format_e colorFormat , int 
 			// If the user picks a sender from the list, the name is derived from the selected index.
 			//
 			if (!m_senderName.empty()) {
-
 				// Check the name against the current index
 				if (m_senderName != NDIsenders.at(index)) {
 					// If the name is different, does the sender exist ?
@@ -1188,6 +1194,16 @@ bool ofxNDIreceive::ReceiveImage(unsigned char *pixels,
 // (Used for receiving Openframeworks ofTexture, ofFbo, ofImage and ofPixels)
 // Use the video frame data pointer externally with GetVideoData()
 // For success, the video frame must be freed with FreeVideoData().
+//
+bool ofxNDIreceive::ReceiveImage()
+{
+	// Unused
+	unsigned int width = 0;
+	unsigned int height = 0;
+	return ReceiveImage(width, height);
+}
+
+
 bool ofxNDIreceive::ReceiveImage(unsigned int &width, unsigned int &height)
 {
 	NDIlib_frame_type_e NDI_frame_type;
